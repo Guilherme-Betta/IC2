@@ -1,0 +1,8 @@
+import pandas as pd
+diretorio = "C:\Users\Guilherme\My Drive\Faculdade\IC 2\Dados\Data_paper.xlsx"
+dados0 = "Data_paper.xlsx"
+
+try:
+    df = pd.read_excel(dados0)
+except FileNotFoundError:
+    print(f"Erro: O arquivo 'dados0' não foi encontrado")

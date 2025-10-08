@@ -1,0 +1,14 @@
+# Ignorar pastas de dados e documentos que não são código-fonte
+Dados/
+Projeto/
+Relatório/
+Reuniões/
+
+# Ignorar o ambiente virtual do Python (MUITO IMPORTANTE)
+.venv/
+
+# Opcional: ignorar tipos de arquivo específicos que podem ser gerados
+# como planilhas de resultados, logs, etc.
+*.xlsx
+*.csv
+*.log

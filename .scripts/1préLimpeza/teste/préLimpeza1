@@ -5,10 +5,10 @@ import os # Biblioteca para interagir com o sistema operacional
 # --- CONFIGURAÇÃO DE CAMINHOS E ARQUIVOS ---
 # 1. COLE O CAMINHO PARA A SUA PASTA DE DADOS AQUI
 
-## caminho_da_pasta = "C:/Users/Guilherme/My Drive/Faculdade/IC 2/Dados"
+caminho_da_pasta = "C://Users//gbett//My Drive//Resenha//Programação//Guilherme-Betta//IC2//Dados"
 
-raw_path = input("Insira o caminho do arquivo: ")
-caminho_da_pasta = raw_path.strip('"').replace('\\', '/')
+## raw_path = input("Insira o caminho do arquivo: ")
+## caminho_da_pasta = raw_path.strip('"').replace('\\', '/')
 
 # 2. NOME DOS ARQUIVOS DE ENTRADA E SAÍDA
 nome_do_arquivo_original = 'dataPaperCorrigido.xlsx' 

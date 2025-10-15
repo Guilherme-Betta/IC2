@@ -1,0 +1,98 @@
+# Importa as bibliotecas necessárias
+import pandas as pd
+import os
+
+# --- CONFIGURAÇÃO ---
+caminho_da_pasta = 'C://Users//gbett//My Drive//Resenha//Programação//Guilherme-Betta//IC2//Dados'
+
+# 1. Arquivo de ENTRADA (gerado pelo Power Query)
+nome_do_arquivo_excel = 'dataPaperCorrigido.xlsx' 
+
+# 2. Arquivo de SAÍDA (o novo Excel com várias planilhas)
+nome_do_arquivo_final = 'dados_analiticos_graduais.xlsx'
+
+# Monta os caminhos completos
+caminho_completo_excel = os.path.join(caminho_da_pasta, nome_do_arquivo_excel)
+caminho_final_excel = os.path.join(caminho_da_pasta, nome_do_arquivo_final)
+
+print(f"Iniciando a limpeza e separação gradual do arquivo: {caminho_completo_excel}")
+
+# --- ETAPA 1: CARREGAMENTO E LIMPEZA INICIAL ---
+try:
+    # Assumimos que a primeira coluna ('month_year') é a nossa data.
+    # 'parse_dates' já a converte para o formato de data do pandas.
+    df = pd.read_excel(caminho_completo_excel, parse_dates=[0])
+except FileNotFoundError:
+    print(f"Erro: O arquivo '{caminho_completo_excel}' não foi encontrado.")
+    exit()
+
+# Define a coluna de data como o índice do DataFrame. Isso facilita muito o fatiamento por datas.
+df.set_index(df.columns[0], inplace=True)
+
+# Limpeza básica (remove colunas 100% vazias ou com mais de 50% de dados faltantes)
+df.dropna(axis=1, how='all', inplace=True)
+limite_geral = len(df) * 0.50
+df.dropna(axis=1, thresh=limite_geral, inplace=True)
+
+print(f"\nDataFrame após limpeza inicial tem {df.shape[0]} linhas e {df.shape[1]} colunas.")
+
+# --- ETAPA 2: IDENTIFICAR VARIÁVEIS 'CORE' E 'TARDIAS' ---
+print("\nIdentificando variáveis que começam tardiamente...")
+
+limiar_inicio_vazio = 0.20
+linhas_iniciais_para_checar = int(len(df) * limiar_inicio_vazio)
+df_inicio = df.head(linhas_iniciais_para_checar)
+
+colunas_tardias_lista = list(df_inicio.columns[df_inicio.isnull().all()])
+colunas_core_lista = [col for col in df.columns if col not in colunas_tardias_lista]
+
+if not colunas_tardias_lista:
+    print("  - Nenhuma coluna foi identificada como começando tardiamente.")
+    print("  - Apenas uma planilha ('dados_core') será gerada.")
+    df.to_excel(caminho_final_excel, sheet_name='dados_core')
+    print(f"\nSucesso! Arquivo final salvo em '{caminho_final_excel}'")
+else:
+    print(f"  - {len(colunas_core_lista)} Variáveis 'Core' identificadas.")
+    print(f"  - {len(colunas_tardias_lista)} Variáveis 'Tardias' identificadas: {colunas_tardias_lista}")
+
+    # --- ETAPA 3: MAPEAMENTO CRONOLÓGICO E AGRUPAMENTO EM 'ONDAS' ---
+    datas_de_inicio = {}
+    for col in colunas_tardias_lista:
+        primeira_data_valida = df[col].first_valid_index()
+        if primeira_data_valida not in datas_de_inicio:
+            datas_de_inicio[primeira_data_valida] = []
+        datas_de_inicio[primeira_data_valida].append(col)
+
+    # Ordena as datas de início para criar as planilhas na ordem correta
+    datas_ordenadas = sorted(datas_de_inicio.keys())
+
+    # --- ETAPA 4: GERAÇÃO DO ARQUIVO EXCEL COM MÚLTIPLAS PLANILHAS ---
+    print("\nIniciando a criação do arquivo Excel com planilhas graduais...")
+    
+    # O 'ExcelWriter' é a ferramenta correta para escrever em várias abas
+    with pd.ExcelWriter(caminho_final_excel) as writer:
+        
+        # 1. Escreve a primeira planilha com os dados 'Core'
+        df_core = df[colunas_core_lista]
+        df_core.to_excel(writer, sheet_name='dados_core')
+        print(f"  - Planilha 'dados_core' criada com {df_core.shape[1]} variáveis.")
+
+        # 2. Loop para criar as planilhas incrementais
+        colunas_acumuladas = colunas_core_lista.copy()
+        
+        for data_inicio in datas_ordenadas:
+            novas_colunas_na_onda = datas_de_inicio[data_inicio]
+            colunas_acumuladas.extend(novas_colunas_na_onda)
+            
+            # Formata a data para um nome de planilha válido e legível
+            nome_planilha = f"a_partir_de_{data_inicio.strftime('%Y_%m')}"
+            
+            # Cria o DataFrame para a planilha, fatiando a partir da data de início
+            df_planilha = df.loc[data_inicio:][colunas_acumuladas].copy()
+            # Remove qualquer linha que ainda possa ter algum NaN no recorte
+            df_planilha.dropna(inplace=True)
+            
+            df_planilha.to_excel(writer, sheet_name=nome_planilha)
+            print(f"  - Planilha '{nome_planilha}' criada com {df_planilha.shape[1]} variáveis.")
+
+    print(f"\nSucesso! O arquivo final com múltiplas planilhas foi salvo em '{caminho_final_excel}'")

@@ -1,0 +1,66 @@
+# Importa as bibliotecas necessárias
+import pandas as pd
+import os
+
+# --- CONFIGURAÇÃO ---
+caminho_da_pasta = 'C://Users//gbett//My Drive//Resenha//Programação//Guilherme-Betta//IC2//Dados'
+
+# 1. Arquivo de ENTRADA (gerado pelo nosso script de limpeza)
+nome_do_arquivo_analitico = 'dados_analiticos_graduais.xlsx'
+
+# 2. Arquivo de SAÍDA (o relatório que será gerado)
+nome_do_arquivo_relatorio = 'relatorio_descritivo_completo.xlsx'
+
+# Monta os caminhos completos
+caminho_completo_input = os.path.join(caminho_da_pasta, nome_do_arquivo_analitico)
+caminho_completo_output = os.path.join(caminho_da_pasta, nome_do_arquivo_relatorio)
+
+print(f"Iniciando a análise descritiva de TODAS as planilhas do arquivo:")
+print(f" -> Lendo de: '{caminho_completo_input}'")
+
+# --- ETAPA 1: CARREGAR O ARQUIVO E OBTER NOMES DAS PLANILHAS ---
+try:
+    # pd.ExcelFile permite inspecionar o arquivo antes de carregar tudo
+    xls = pd.ExcelFile(caminho_completo_input)
+    nomes_das_planilhas = xls.sheet_names
+    print(f"\nForam encontradas {len(nomes_das_planilhas)} planilhas para analisar: {nomes_das_planilhas}")
+except FileNotFoundError:
+    print(f"Erro: O arquivo '{caminho_completo_input}' não foi encontrado.")
+    exit()
+
+# --- ETAPA 2: LOOP PARA ANALISAR CADA PLANILHA ---
+# Vamos armazenar os resultados (os DataFrames de resumo) em um dicionário
+resultados_descritivos = {}
+
+print("\nProcessando cada planilha...")
+for nome_planilha in nomes_das_planilhas:
+    print(f"  - Analisando '{nome_planilha}'...")
+    
+    # Carrega a planilha específica em um DataFrame
+    # index_col=0 define a primeira coluna (nossas datas) como o índice
+    df = pd.read_excel(xls, sheet_name=nome_planilha, index_col=0)
+    
+    # Calcula o resumo estatístico
+    resumo = df.describe()
+    
+    # Armazena o resumo no nosso dicionário. A chave será o nome da futura planilha de resumo.
+    resultados_descritivos[f"resumo_{nome_planilha}"] = resumo
+
+# --- ETAPA 3: SALVAR OS RESULTADOS EM UM NOVO ARQUIVO EXCEL ---
+print("\nGerando o arquivo de relatório com os resultados...")
+try:
+    # Usamos o ExcelWriter para escrever os múltiplos resumos em múltiplas planilhas
+    with pd.ExcelWriter(caminho_completo_output) as writer:
+        for nome_planilha_resumo, df_resumo in resultados_descritivos.items():
+            # Escreve cada DataFrame de resumo em sua própria planilha
+            df_resumo.to_excel(writer, sheet_name=nome_planilha_resumo)
+            print(f"  - Planilha de resumo '{nome_planilha_resumo}' salva.")
+
+    print("\n----------------------------------------------------")
+    print("SUCESSO!")
+    print(f"O relatório descritivo completo foi salvo em:")
+    print(f" -> '{caminho_completo_output}'")
+    print("----------------------------------------------------")
+
+except Exception as e:
+    print(f"\nOcorreu um erro ao tentar salvar o arquivo de relatório: {e}")

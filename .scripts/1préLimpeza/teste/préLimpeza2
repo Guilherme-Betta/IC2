@@ -3,7 +3,7 @@ import pandas as pd
 import os
 
 # --- CONFIGURAÇÃO ---
-caminho_da_pasta = 'C://Users//gbett//My Drive//Resenha//Programação//Guilherme-Betta//IC2//Dados'
+caminho_da_pasta = "C:/Users/Guilherme/My Drive/Resenha/Programação/Guilherme-Betta/IC2/Tentativas/Tentativa 4/"
 
 # 1. Arquivo de ENTRADA (gerado pelo Power Query)
 nome_do_arquivo_excel = 'dataPaperCorrigido.xlsx' 

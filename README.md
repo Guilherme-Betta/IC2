@@ -27,6 +27,14 @@ The main goal is to apply Machine Learning methods to handle data cleaning and a
 * **IDE:** Visual Studio Code (VS Code)
 * **Documentation:** Jupyter Notebooks
 
+### 🚀 How to run this project
+
+1. Clone this repository.
+2. Install the necessary dependencies running the following command on the terminal:
+
+   ```bash
+   pip install -r requirements.txt
+
 ---
 
 ## 🇧🇷 Português
@@ -49,3 +57,10 @@ Este repositório contém os scripts necessários para atingir os seguintes obje
 * **IDE:** Visual Studio Code (VS Code)
 * **Reprodutibilidade:** Os códigos foram documentados em formato de células do Jupyter Notebook.
 
+### 🚀 Como executar o projeto
+
+1. Clone este repositório.
+2. Instale as dependências necessárias rodando o seguinte comando no terminal:
+
+   ```bash
+   pip install -r requirements.txt

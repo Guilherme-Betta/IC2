@@ -1,0 +1,166 @@
+# Importa as bibliotecas necessárias
+import pandas as pd
+import os
+
+# --- CONFIGURAÇÃO ---
+caminho_da_pasta = input('Insira o caminho da Pasta:')
+caminho_da_pasta = caminho_da_pasta.strip('"').replace('\\', '/')
+
+# 1. Arquivo de ENTRADA (gerado pelo Power Query)
+nome_do_arquivo_excel = 'dadosLargos.xlsx' 
+
+# 2. Arquivo de SAÍDA (o novo Excel com várias planilhas)
+nome_do_arquivo_final = 'dados_analiticos_graduais.xlsx'
+
+# Monta os caminhos completos
+caminho_completo_excel = os.path.join(caminho_da_pasta, nome_do_arquivo_excel)
+caminho_final_excel = os.path.join(caminho_da_pasta, nome_do_arquivo_final)
+
+# ============================================================================
+# DIAGNÓSTICO (OPCIONAL) - Descomente as linhas abaixo para ativar
+# ============================================================================
+# EXECUTAR_DIAGNOSTICO = True  # Mude para False para desativar
+EXECUTAR_DIAGNOSTICO = True  # Mude para True para ativar
+
+if EXECUTAR_DIAGNOSTICO:
+    print("=== EXECUTANDO DIAGNÓSTICO ===\n")
+    try:
+        df_diag = pd.read_excel(caminho_completo_excel, parse_dates=[0])
+        df_diag.set_index(df_diag.columns[0], inplace=True)
+        
+        print(f"Total de linhas: {len(df_diag)}")
+        print(f"Total de colunas: {len(df_diag.columns)}")
+        print(f"\nPrimeiras 5 colunas: {list(df_diag.columns[:5])}")
+        print(f"\nPrimeiras 3 linhas:")
+        print(df_diag.head(3))
+        
+        print(f"\n{'='*60}")
+        print("Colunas que começam tardiamente (vazias nas primeiras 20%):")
+        print(f"{'='*60}")
+        primeiras_linhas = max(1, int(len(df_diag) * 0.20))
+        colunas_tardias_diag = []
+        for col in df_diag.columns:
+            faltantes = df_diag[col].head(primeiras_linhas).isnull().sum()
+            if faltantes == primeiras_linhas:
+                primeira_data = df_diag[col].first_valid_index()
+                colunas_tardias_diag.append(col)
+                print(f"  - {col}: começa em {primeira_data}")
+        
+        if not colunas_tardias_diag:
+            print("  Nenhuma coluna identificada como tardia.")
+        else:
+            print(f"\nTotal de colunas tardias encontradas: {len(colunas_tardias_diag)}")
+        
+        print(f"\n{'='*60}\n")
+        
+    except Exception as e:
+        print(f"Erro no diagnóstico: {e}\n")
+
+# ============================================================================
+# PROCESSAMENTO PRINCIPAL
+# ============================================================================
+
+print(f"Iniciando a limpeza e separação gradual do arquivo: {caminho_completo_excel}")
+
+# --- ETAPA 1: CARREGAMENTO E LIMPEZA INICIAL ---
+try:
+    df = pd.read_excel(caminho_completo_excel, parse_dates=[0])
+except FileNotFoundError:
+    print(f"Erro: O arquivo '{caminho_completo_excel}' não foi encontrado.")
+    exit()
+except Exception as e:
+    print(f"Erro ao ler o arquivo: {e}")
+    exit()
+
+# Define a coluna de data como o índice do DataFrame
+df.set_index(df.columns[0], inplace=True)
+
+print(f"\nDataFrame ORIGINAL tem {df.shape[0]} linhas e {df.shape[1]} colunas.")
+
+# CORREÇÃO 1: Remover APENAS colunas 100% vazias (não usar thresh)
+df.dropna(axis=1, how='all', inplace=True)
+print(f"Após remover colunas 100% vazias: {df.shape[0]} linhas e {df.shape[1]} colunas.")
+
+# --- ETAPA 2: IDENTIFICAR VARIÁVEIS 'CORE' E 'TARDIAS' ---
+print("\nIdentificando variáveis que começam tardiamente...")
+
+# CORREÇÃO 2: Reduzir o limiar
+limiar_inicio_vazio = 0.10  # Reduzido de 0.20 para 0.10
+linhas_iniciais_para_checar = max(1, int(len(df) * limiar_inicio_vazio))
+df_inicio = df.head(linhas_iniciais_para_checar)
+
+# Identifica colunas que estão COMPLETAMENTE vazias nas primeiras linhas
+colunas_tardias_lista = list(df_inicio.columns[df_inicio.isnull().all()])
+colunas_core_lista = [col for col in df.columns if col not in colunas_tardias_lista]
+
+print(f"  - Verificando primeiras {linhas_iniciais_para_checar} linhas de {len(df)} totais")
+print(f"  - {len(colunas_core_lista)} Variáveis 'Core' identificadas.")
+print(f"  - {len(colunas_tardias_lista)} Variáveis 'Tardias' identificadas.")
+
+if colunas_tardias_lista:
+    if len(colunas_tardias_lista) > 5:
+        print(f"  - Variáveis Tardias (primeiras 5): {colunas_tardias_lista[:5]}")
+    else:
+        print(f"  - Variáveis Tardias: {colunas_tardias_lista}")
+
+if not colunas_tardias_lista:
+    print("  - Nenhuma coluna foi identificada como começando tardiamente.")
+    print("  - Apenas uma planilha ('dados_core') será gerada.")
+    df.to_excel(caminho_final_excel, sheet_name='dados_core', index=True)
+    print(f"\nSucesso! Arquivo final salvo em '{caminho_final_excel}'")
+    print(f"  - Planilha 'dados_core' tem {df.shape[0]} linhas e {df.shape[1]} colunas.")
+else:
+    # --- ETAPA 3: MAPEAMENTO CRONOLÓGICO E AGRUPAMENTO EM 'ONDAS' ---
+    datas_de_inicio = {}
+    for col in colunas_tardias_lista:
+        primeira_data_valida = df[col].first_valid_index()
+        if primeira_data_valida is not None:
+            if primeira_data_valida not in datas_de_inicio:
+                datas_de_inicio[primeira_data_valida] = []
+            datas_de_inicio[primeira_data_valida].append(col)
+
+    # Ordena as datas de início para criar as planilhas na ordem correta
+    datas_ordenadas = sorted(datas_de_inicio.keys())
+    
+    print(f"\n  - Encontradas {len(datas_ordenadas)} datas distintas de introdução de variáveis:")
+    for data in datas_ordenadas[:5]:  # Mostrar primeiras 5
+        print(f"    * {data}: {len(datas_de_inicio[data])} variáveis")
+
+    # --- ETAPA 4: GERAÇÃO DO ARQUIVO EXCEL COM MÚLTIPLAS PLANILHAS ---
+    print("\nIniciando a criação do arquivo Excel com planilhas graduais...")
+    
+    with pd.ExcelWriter(caminho_final_excel, engine='openpyxl') as writer:
+        
+        # 1. Escreve a primeira planilha com os dados 'Core'
+        df_core = df[colunas_core_lista].copy()
+        df_core.to_excel(writer, sheet_name='dados_core', index=True)
+        print(f"  - Planilha 'dados_core' criada com {df_core.shape[1]} variáveis e {df_core.shape[0]} linhas.")
+
+        # 2. Loop para criar as planilhas incrementais
+        colunas_acumuladas = colunas_core_lista.copy()
+        
+        for data_inicio in datas_ordenadas:
+            novas_colunas_na_onda = datas_de_inicio[data_inicio]
+            colunas_acumuladas.extend(novas_colunas_na_onda)
+            
+            # Formata a data para um nome de planilha válido e legível
+            nome_planilha = f"a_partir_de_{data_inicio.strftime('%Y_%m')}"
+            if len(nome_planilha) > 31:
+                nome_planilha = f"desde_{data_inicio.strftime('%Y%m')}"
+
+            # Cria o DataFrame para a planilha, fatiando a partir da data de início
+            df_planilha = df.loc[data_inicio:][colunas_acumuladas].copy()
+            
+            # Remove apenas linhas completamente vazias
+            df_planilha.dropna(how='all', inplace=True)
+            
+            # Verificar se não está vazia
+            if df_planilha.empty:
+                print(f"  - AVISO: Planilha '{nome_planilha}' está vazia e será pulada.")
+                continue
+            
+            df_planilha.to_excel(writer, sheet_name=nome_planilha, index=True)
+            print(f"  - Planilha '{nome_planilha}' criada com {df_planilha.shape[1]} variáveis e {df_planilha.shape[0]} linhas.")
+            print(f"    (Dados de {df_planilha.index[0]} até {df_planilha.index[-1]})")
+
+    print(f"\nSucesso! O arquivo final com múltiplas planilhas foi salvo em '{caminho_final_excel}'")

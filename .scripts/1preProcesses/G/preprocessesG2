@@ -3,10 +3,11 @@ import pandas as pd
 import os
 
 # --- CONFIGURAÇÃO ---
-caminho_da_pasta = "C:/Users/Guilherme/My Drive/Resenha/Programação/Guilherme-Betta/IC2/Tentativas/Tentativa 4/"
+caminho_da_pasta = input('Insira o caminho da pasta:')
+caminho_da_pasta = caminho_da_pasta.strip('"').replace('\\', '/')
 
 # 1. Arquivo de ENTRADA (gerado pelo Power Query)
-nome_do_arquivo_excel = 'dataPaperCorrigido.xlsx' 
+nome_do_arquivo_excel = 'dadosLargos.xlsx' 
 
 # 2. Arquivo de SAÍDA (o novo Excel com várias planilhas)
 nome_do_arquivo_final = 'dados_analiticos_graduais.xlsx'
@@ -25,6 +26,9 @@ try:
 except FileNotFoundError:
     print(f"Erro: O arquivo '{caminho_completo_excel}' não foi encontrado.")
     exit()
+except Exception as e:
+    print(f"Erro ao ler o arquivo: {e}")
+    exit()
 
 # Define a coluna de data como o índice do DataFrame. Isso facilita muito o fatiamento por datas.
 df.set_index(df.columns[0], inplace=True)
@@ -32,7 +36,7 @@ df.set_index(df.columns[0], inplace=True)
 # Limpeza básica (remove colunas 100% vazias ou com mais de 50% de dados faltantes)
 df.dropna(axis=1, how='all', inplace=True)
 limite_geral = len(df) * 0.50
-df.dropna(axis=1, thresh=limite_geral, inplace=True)
+df.dropna(axis=1, thresh=int(limite_geral), inplace=True)
 
 print(f"\nDataFrame após limpeza inicial tem {df.shape[0]} linhas e {df.shape[1]} colunas.")
 
@@ -59,9 +63,10 @@ else:
     datas_de_inicio = {}
     for col in colunas_tardias_lista:
         primeira_data_valida = df[col].first_valid_index()
-        if primeira_data_valida not in datas_de_inicio:
-            datas_de_inicio[primeira_data_valida] = []
-        datas_de_inicio[primeira_data_valida].append(col)
+        if primeira_data_valida is not None:
+            if primeira_data_valida not in datas_de_inicio:
+                datas_de_inicio[primeira_data_valida] = []
+            datas_de_inicio[primeira_data_valida].append(col)
 
     # Ordena as datas de início para criar as planilhas na ordem correta
     datas_ordenadas = sorted(datas_de_inicio.keys())
@@ -70,7 +75,7 @@ else:
     print("\nIniciando a criação do arquivo Excel com planilhas graduais...")
     
     # O 'ExcelWriter' é a ferramenta correta para escrever em várias abas
-    with pd.ExcelWriter(caminho_final_excel) as writer:
+    with pd.ExcelWriter(caminho_final_excel, engine='openpyxl') as writer:
         
         # 1. Escreve a primeira planilha com os dados 'Core'
         df_core = df[colunas_core_lista]
@@ -86,11 +91,19 @@ else:
             
             # Formata a data para um nome de planilha válido e legível
             nome_planilha = f"a_partir_de_{data_inicio.strftime('%Y_%m')}"
-            
+            # Limitar tamanho do nome
+            if len(nome_planilha) > 31:
+                nome_planilha = f"desde_{data_inicio.strftime('%Y%m')}"
+
             # Cria o DataFrame para a planilha, fatiando a partir da data de início
             df_planilha = df.loc[data_inicio:][colunas_acumuladas].copy()
-            # Remove qualquer linha que ainda possa ter algum NaN no recorte
-            df_planilha.dropna(inplace=True)
+            # Remove qualquer linha que ainda possa ter algum NaN no recorte (meio agressivo)
+            # df_planilha.dropna(inplace=True)
+            # Remove apenas linhas completamente vazias (talvez mais sensato):
+            df_planilha.dropna(how='all', inplace=True)
+            if df_planilha.empty:
+                print(f"    - AVISO: Planilha '{nome_planilha}' está vazia e será pulada.")
+                continue
             
             df_planilha.to_excel(writer, sheet_name=nome_planilha)
             print(f"  - Planilha '{nome_planilha}' criada com {df_planilha.shape[1]} variáveis.")

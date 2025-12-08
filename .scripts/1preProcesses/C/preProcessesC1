@@ -1,0 +1,145 @@
+import pandas as pd
+import numpy as np
+from datetime import datetime
+from openpyxl import load_workbook
+from openpyxl.utils.dataframe import dataframe_to_rows
+
+def processar_banco_dados_excel(arquivo_entrada, arquivo_saida, coluna_data='Data'):
+    """
+    Processa um banco de dados Excel, removendo colunas vazias e separando
+    variáveis por data de introdução.
+    
+    Parâmetros:
+    - arquivo_entrada: caminho do arquivo Excel de entrada
+    - arquivo_saida: caminho do arquivo Excel de saída
+    - coluna_data: nome da coluna que contém as datas (padrão: 'Data')
+    """
+    
+    # Ler o arquivo Excel
+    print(f"Lendo arquivo: {arquivo_entrada}")
+    df = pd.read_excel(arquivo_entrada)
+    
+    # Remover colunas completamente vazias
+    print("Removendo colunas vazias...")
+    df = df.dropna(axis=1, how='all')
+    
+    # Verificar se existe coluna de data
+    if coluna_data not in df.columns:
+        # Tentar encontrar coluna de data automaticamente
+        possiveis_datas = [col for col in df.columns if 'data' in col.lower() or 'date' in col.lower()]
+        if possiveis_datas:
+            coluna_data = possiveis_datas[0]
+            print(f"Coluna de data detectada: {coluna_data}")
+        else:
+            # Se não houver coluna de data, usar o índice como referência
+            print("Aviso: Nenhuma coluna de data encontrada. Usando índice como referência.")
+            df[coluna_data] = df.index
+    else:
+        # Converter coluna de data para datetime se necessário
+        if not pd.api.types.is_datetime64_any_dtype(df[coluna_data]):
+            df[coluna_data] = pd.to_datetime(df[coluna_data], errors='coerce')
+    
+    # Ordenar por data
+    df = df.sort_values(by=coluna_data).reset_index(drop=True)
+    
+    # Identificar quando cada variável (coluna) é introduzida
+    print("Identificando datas de introdução das variáveis...")
+    colunas_variaveis = [col for col in df.columns if col != coluna_data]
+    
+    # Dicionário para armazenar a primeira data não-nula de cada variável
+    introducoes = {}
+    
+    for coluna in colunas_variaveis:
+        # Encontrar primeira linha onde a variável não é nula
+        primeira_linha = df[coluna].first_valid_index()
+        if primeira_linha is not None:
+            primeira_data = df.loc[primeira_linha, coluna_data]
+            introducoes[coluna] = primeira_data
+    
+    # Ordenar variáveis por data de introdução
+    variaveis_ordenadas = sorted(introducoes.items(), key=lambda x: x[1])
+    
+    # Criar grupos de variáveis por data de introdução
+    grupos = {}
+    variaveis_acumuladas = []
+    
+    for variavel, data_introducao in variaveis_ordenadas:
+        variaveis_acumuladas.append(variavel)
+        # Usar data como chave (convertida para string para agrupar por dia)
+        data_chave = pd.Timestamp(data_introducao).date() if isinstance(data_introducao, pd.Timestamp) else data_introducao
+        
+        if data_chave not in grupos:
+            grupos[data_chave] = {
+                'data_inicio': data_introducao,
+                'variaveis': variaveis_acumuladas.copy()
+            }
+        else:
+            # Se já existe grupo para esta data, adicionar variável
+            grupos[data_chave]['variaveis'].append(variavel)
+    
+    # Criar planilhas para cada grupo
+    print(f"\nCriando {len(grupos)} planilhas...")
+    
+    with pd.ExcelWriter(arquivo_saida, engine='openpyxl') as writer:
+        planilha_num = 1
+        
+        for data_chave in sorted(grupos.keys()):
+            grupo = grupos[data_chave]
+            data_inicio = grupo['data_inicio']
+            variaveis_grupo = grupo['variaveis']
+            
+            # Filtrar dados a partir da data de introdução
+            df_filtrado = df[df[coluna_data] >= data_inicio].copy()
+            
+            # Selecionar apenas as colunas relevantes (data + variáveis do grupo)
+            colunas_selecionadas = [coluna_data] + variaveis_grupo
+            df_filtrado = df_filtrado[colunas_selecionadas]
+            
+            # Remover linhas onde todas as variáveis são nulas
+            colunas_var = [col for col in df_filtrado.columns if col != coluna_data]
+            df_filtrado = df_filtrado.dropna(subset=colunas_var, how='all')
+            
+            # Nome da planilha
+            nome_planilha = f"Planilha_{planilha_num}_Desde_{pd.Timestamp(data_inicio).strftime('%Y-%m-%d')}"
+            # Limitar tamanho do nome (Excel tem limite de 31 caracteres)
+            if len(nome_planilha) > 31:
+                nome_planilha = f"Plan_{planilha_num}_{pd.Timestamp(data_inicio).strftime('%Y%m%d')}"
+            
+            # Escrever planilha
+            df_filtrado.to_excel(writer, sheet_name=nome_planilha, index=False)
+            
+            print(f"  - {nome_planilha}: {len(df_filtrado)} linhas, {len(variaveis_grupo)} variáveis")
+            planilha_num += 1
+        
+        # Criar também uma planilha resumo
+        resumo_data = []
+        for data_chave in sorted(grupos.keys()):
+            grupo = grupos[data_chave]
+            resumo_data.append({
+                'Data_Introducao': pd.Timestamp(grupo['data_inicio']).strftime('%Y-%m-%d'),
+                'Numero_Variaveis': len(grupo['variaveis']),
+                'Variaveis': ', '.join(grupo['variaveis'])
+            })
+        
+        df_resumo = pd.DataFrame(resumo_data)
+        df_resumo.to_excel(writer, sheet_name='Resumo', index=False)
+    
+    print(f"\nProcessamento concluído! Arquivo salvo em: {arquivo_saida}")
+    return grupos
+
+
+# Exemplo de uso
+if __name__ == "__main__":
+    # Configurar caminhos dos arquivos
+    arquivo_entrada = "dados_entrada.xlsx"  # Substitua pelo caminho do seu arquivo
+    arquivo_saida = "dados_processados.xlsx"  # Arquivo de saída
+    
+    # Processar
+    grupos = processar_banco_dados_excel(arquivo_entrada, arquivo_saida)
+    
+    # Mostrar resumo
+    print("\n=== RESUMO ===")
+    for data_chave in sorted(grupos.keys()):
+        grupo = grupos[data_chave]
+        print(f"\nData: {pd.Timestamp(grupo['data_inicio']).strftime('%Y-%m-%d')}")
+        print(f"Variáveis ({len(grupo['variaveis'])}): {', '.join(grupo['variaveis'])}")

@@ -1,0 +1,161 @@
+import pandas as pd
+import os
+from datetime import datetime
+import warnings
+
+# Suprime avisos do openpyxl sobre formatação
+warnings.simplefilter("ignore")
+
+# --- CONFIGURAÇÃO ---
+# caminho_da_pasta = input('Insira o caminho da Pasta:').strip('"').replace('\\', '/')
+# Para teste rápido, pode fixar ou usar o input acima
+caminho_da_pasta = r"C:/Users/Guilherme/My Drive/Resenha/Programação/Guilherme-Betta/IC2\Dados/teste"  
+arquivo_entrada = os.path.join(caminho_da_pasta, 'dadosLargos.xlsx')
+timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+arquivo_saida = os.path.join(caminho_da_pasta, f'dados_analiticos_graduais_{timestamp}.xlsx')
+
+# --- FUNÇÕES AUXILIARES ---
+
+def converter_data_pt(data_val):
+    """Converte 'Out, 2016' ou timestamp para datetime."""
+    meses = {'jan': 1, 'fev': 2, 'mar': 3, 'abr': 4, 'mai': 5, 'jun': 6,
+             'jul': 7, 'ago': 8, 'set': 9, 'out': 10, 'nov': 11, 'dez': 12}
+    try:
+        if pd.isna(data_val): return None
+        if isinstance(data_val, (datetime, pd.Timestamp)): return data_val
+        
+        # Limpeza da string
+        s = str(data_val).strip().lower().replace('.', '')
+        parte_mes, parte_ano = s.split(',')
+        return datetime(int(parte_ano), meses[parte_mes.strip()[:3]], 1)
+    except:
+        return None
+
+def ler_e_limpar_aba(caminho, nome_aba, eh_anual=True):
+    """Lê uma aba, converte datas e ajusta índices (MultiIndex se necessário)."""
+    try:
+        df = pd.read_excel(caminho, sheet_name=nome_aba)
+        if df.empty: return None
+
+        # Remove colunas 100% vazias
+        df.dropna(axis=1, how='all', inplace=True)
+        col_data = df.columns[0]
+
+        # Tratamento Especial para Dados Anuais (Índice = Ano Inteiro)
+        if not eh_anual:
+            # Tenta extrair apenas números da primeira coluna
+            df['Ano'] = pd.to_numeric(df[col_data].astype(str).str.extract(r'(\d{4})')[0], errors='coerce')
+            df.dropna(subset=['Ano'], inplace=True)
+            df.set_index('Ano', inplace=True)
+            return df
+
+        # Tratamento para Planilhas Mensais (Índice = Data + Estatística)
+        df[col_data] = df[col_data].apply(converter_data_pt)
+        df.dropna(subset=[col_data], inplace=True)
+
+        # Lógica MultiIndex (se houver coluna de estatística)
+        if len(df.columns) > 1 and df.iloc[:, 1].astype(str).str.lower().str.contains(r'm[íi]n|m[ée]d|m[áa]x').any():
+            col_stat = df.columns[1]
+            df.set_index([col_data, col_stat], inplace=True)
+            df.index.names = ['Data', 'Estatistica']
+        else:
+            df.set_index(col_data, inplace=True)
+            df.index.name = 'Data'
+
+        return df
+    except Exception as e:
+        print(f"Erro ao ler aba '{nome_aba}': {e}")
+        return None
+
+# --- EXECUÇÃO PRINCIPAL ---
+
+print(">>> 1. Lendo arquivo e identificando abas...")
+xls = pd.ExcelFile(arquivo_entrada)
+abas_anos = [aba for aba in xls.sheet_names if aba.isdigit() and len(aba) == 4]
+tem_dados_anuais = 'DadosAnuais' in xls.sheet_names
+
+# 1. Processar Planilhas Mensais (Loop Otimizado)
+dfs_mensais = []
+for ano in sorted(abas_anos):
+    print(f"   - Processando {ano}...")
+    df_temp = ler_e_limpar_aba(arquivo_entrada, ano, eh_anual=True)
+    if df_temp is not None:
+        dfs_mensais.append(df_temp)
+
+if not dfs_mensais:
+    raise ValueError("Nenhuma planilha mensal válida encontrada.")
+
+df_completo = pd.concat(dfs_mensais, axis=0, sort=False)
+df_completo.sort_index(inplace=True)
+print(f">>> Concatenado: {df_completo.shape} - Período: {df_completo.index.get_level_values(0).min()} a {df_completo.index.get_level_values(0).max()}")
+
+# 2. Processar Dados Anuais
+df_anuais = None
+if tem_dados_anuais:
+    print(">>> Processando Dados Anuais...")
+    df_anuais = ler_e_limpar_aba(arquivo_entrada, 'DadosAnuais', eh_anual=False)
+
+# --- IDENTIFICAÇÃO DE VARIÁVEIS (CORE vs TARDIAS) ---
+print(">>> 2. Identificando Variáveis...")
+limite_corte = int(len(df_completo) * 0.10) # 10% inicial
+df_inicio = df_completo.head(limite_corte)
+
+# Core: colunas que NÃO são todas nulas no início
+cols_core = [c for c in df_completo.columns if not df_inicio[c].isnull().all()]
+cols_tardias = [c for c in df_completo.columns if c not in cols_core]
+
+print(f"   - Core: {len(cols_core)} | Tardias: {len(cols_tardias)}")
+
+# Mapear data de início das tardias
+mapa_inicio = {}
+for col in cols_tardias:
+    primeira_valid = df_completo[col].first_valid_index()
+    if primeira_valid:
+        # Pega apenas a data se for MultiIndex
+        data_ref = primeira_valid[0] if isinstance(primeira_valid, tuple) else primeira_valid
+        mapa_inicio.setdefault(data_ref, []).append(col)
+
+datas_ordenadas = sorted(mapa_inicio.keys())
+
+# --- SALVAMENTO (ENGINE OTIMIZADA) ---
+print(f">>> 3. Gerando arquivo final: {os.path.basename(arquivo_saida)}")
+
+with pd.ExcelWriter(arquivo_saida, engine='openpyxl') as writer:
+    
+    # Função interna para formatar data (aplica a coluna inteira de uma vez se possível, mas openpyxl requer célula)
+    def formatar_coluna_data(sheet):
+        for row in sheet.iter_rows(min_row=2, min_col=1, max_col=1):
+            for cell in row:
+                cell.number_format = 'DD/MM/YYYY'
+
+    # A. Salvar Core
+    df_core = df_completo[cols_core].dropna(how='all')
+    if not df_core.empty:
+        df_core.to_excel(writer, sheet_name='dados_core')
+        formatar_coluna_data(writer.sheets['dados_core'])
+
+    # B. Salvar Tardias (Incrementais)
+    cols_acumuladas = list(cols_core)
+    
+    for data_corte in datas_ordenadas:
+        novas_vars = mapa_inicio[data_corte]
+        cols_acumuladas.extend(novas_vars)
+        
+        # Nome Inteligente
+        prefixo = "_".join([v[:10] for v in novas_vars[:2]]) # Pega 2 primeiras vars
+        sufixo = f"_+{len(novas_vars)-2}" if len(novas_vars) > 2 else ""
+        nome_aba = (prefixo + sufixo)[:30].replace('/', '').replace('[', '') # Sanitiza e corta
+        
+        # Filtro e Save (Slice eficiente)
+        idx_slice = df_completo.index.get_level_values(0) >= data_corte
+        df_fatia = df_completo.loc[idx_slice, cols_acumuladas].dropna(how='all', axis=1).dropna(how='all', axis=0)
+        
+        if not df_fatia.empty:
+            df_fatia.to_excel(writer, sheet_name=nome_aba)
+            formatar_coluna_data(writer.sheets[nome_aba])
+
+    # C. Salvar Anuais
+    if df_anuais is not None and not df_anuais.empty:
+        df_anuais.to_excel(writer, sheet_name='dados_anuais')
+
+print(">>> Processo Concluído com Sucesso.")

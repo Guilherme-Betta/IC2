@@ -1,0 +1,612 @@
+# Importa as bibliotecas necessárias
+import pandas as pd
+import os
+from datetime import datetime
+import locale
+
+# --- CONFIGURAÇÃO ---
+caminho_da_pasta = input('Insira o caminho da Pasta:')
+caminho_da_pasta = caminho_da_pasta.strip('"').replace('\\', '/')
+
+# 1. Arquivo de ENTRADA (gerado pelo Power Query)
+nome_do_arquivo_excel = 'dadosLargos.xlsx' 
+
+# 2. Arquivo de SAÍDA (o novo Excel com várias planilhas)
+nome_do_arquivo_final = 'dados_analiticos_graduais.xlsx'
+
+# Monta os caminhos completos
+caminho_completo_excel = os.path.join(caminho_da_pasta, nome_do_arquivo_excel)
+caminho_final_excel = os.path.join(caminho_da_pasta, nome_do_arquivo_final)
+
+# ============================================================================
+# FUNÇÃO AUXILIAR: Converter data de "Out, 2016" para datetime
+# ============================================================================
+def converter_data_brasileira(data_str):
+    """
+    Converte string no formato "Out, 2016" para datetime.
+    Retorna None se não conseguir converter.
+    """
+    if pd.isna(data_str):
+        return None
+    
+    # Se já for datetime, retorna como está
+    if isinstance(data_str, datetime):
+        return data_str
+    if isinstance(data_str, pd.Timestamp):
+        return data_str.to_pydatetime()
+    
+    # Mapeamento de meses em português para números
+    meses_pt = {
+        'jan': 1, 'fev': 2, 'mar': 3, 'abr': 4, 'mai': 5, 'jun': 6,
+        'jul': 7, 'ago': 8, 'set': 9, 'out': 10, 'nov': 11, 'dez': 12
+    }
+    
+    try:
+        # Remove espaços extras, pontos e divide por vírgula
+        data_limpa = str(data_str).strip().replace('.', '')
+        partes = data_limpa.split(',')
+        
+        if len(partes) != 2:
+            return None
+        
+        mes_str = partes[0].strip().lower()[:3]  # Pega primeiras 3 letras
+        ano_str = partes[1].strip()
+        
+        if mes_str in meses_pt and ano_str.isdigit():
+            mes = meses_pt[mes_str]
+            ano = int(ano_str)
+            # Cria data no primeiro dia do mês
+            return datetime(ano, mes, 1)
+        else:
+            return None
+    except Exception as e:
+        return None
+
+# ============================================================================
+# ETAPA 0: CARREGAR TODAS AS PLANILHAS DO EXCEL
+# ============================================================================
+print(f"Iniciando a leitura de todas as planilhas do arquivo: {caminho_completo_excel}")
+
+try:
+    # Lê todas as planilhas do Excel
+    excel_file = pd.ExcelFile(caminho_completo_excel)
+    nomes_planilhas = excel_file.sheet_names
+    print(f"\nPlanilhas encontradas: {nomes_planilhas}")
+    
+except FileNotFoundError:
+    print(f"Erro: O arquivo '{caminho_completo_excel}' não foi encontrado.")
+    exit()
+except Exception as e:
+    print(f"Erro ao ler o arquivo: {e}")
+    exit()
+
+# Separa planilhas anuais da planilha de dados anuais
+planilhas_anuais = []
+planilha_dados_anuais = None
+
+for nome in nomes_planilhas:
+    if nome.lower() == 'dadosanuais':
+        planilha_dados_anuais = nome
+    elif nome.isdigit() and len(nome) == 4:  # Verifica se é um ano (4 dígitos)
+        planilhas_anuais.append(nome)
+
+# Ordena as planilhas anuais cronologicamente
+planilhas_anuais.sort()
+
+print(f"\nPlanilhas anuais encontradas ({len(planilhas_anuais)}): {planilhas_anuais}")
+if planilha_dados_anuais:
+    print(f"Planilha de dados anuais: {planilha_dados_anuais}")
+
+# ============================================================================
+# ETAPA 1: CONCATENAR TODAS AS PLANILHAS ANUAIS
+# ============================================================================
+print("\n" + "="*60)
+print("CONCATENANDO PLANILHAS ANUAIS")
+print("="*60)
+
+dataframes_anuais = []
+total_linhas_esperadas = 0
+
+for ano_planilha in planilhas_anuais:
+    print(f"\nProcessando planilha do ano {ano_planilha}...")
+    try:
+        df_ano = pd.read_excel(caminho_completo_excel, sheet_name=ano_planilha)
+        
+        # Verifica se a primeira coluna é a coluna de data
+        if len(df_ano.columns) == 0:
+            print(f"  AVISO: Planilha {ano_planilha} está vazia. Pulando...")
+            continue
+        
+        coluna_data = df_ano.columns[0]
+        print(f"  - Coluna de data: '{coluna_data}'")
+        print(f"  - Dimensões ORIGINAIS: {df_ano.shape[0]} linhas x {df_ano.shape[1]} colunas")
+        
+        # DIAGNÓSTICO: Mostra primeiras linhas antes da conversão
+        print(f"  - Primeiras 5 valores da coluna de data:")
+        for i in range(min(5, len(df_ano))):
+            print(f"      Linha {i+1}: '{df_ano.iloc[i, 0]}' (tipo: {type(df_ano.iloc[i, 0])})")
+        
+        # Converte a coluna de data para datetime
+        print(f"  - Convertendo datas...")
+        df_ano[coluna_data] = df_ano[coluna_data].apply(converter_data_brasileira)
+        
+        # DIAGNÓSTICO: Verifica quantas datas falharam na conversão
+        linhas_antes = len(df_ano)
+        datas_falhadas = df_ano[coluna_data].isna().sum()
+        
+        if datas_falhadas > 0:
+            print(f"  - AVISO: {datas_falhadas} datas não puderam ser convertidas!")
+            # Mostra exemplos de datas que falharam
+            indices_falhados = df_ano[df_ano[coluna_data].isna()].index[:10]
+            if len(indices_falhados) > 0:
+                # Pega os valores originais antes da conversão
+                df_ano_original = pd.read_excel(caminho_completo_excel, sheet_name=ano_planilha)
+                print(f"  - Exemplos de datas que falharam:")
+                for idx in indices_falhados:
+                    if idx < len(df_ano_original):
+                        valor_original = df_ano_original.iloc[idx, 0]
+                        print(f"      Linha {idx+1}: '{valor_original}' (tipo: {type(valor_original)})")
+        
+        # Remove linhas onde a data não pôde ser convertida
+        df_ano = df_ano.dropna(subset=[coluna_data])
+        linhas_depois = len(df_ano)
+        
+        if linhas_antes != linhas_depois:
+            print(f"  - AVISO: {linhas_antes - linhas_depois} linhas foram removidas devido a datas inválidas!")
+        
+        # TRATAMENTO DE ÍNDICES DUPLICADOS: Verifica se há coluna de estatística
+        # Se houver múltiplas linhas com a mesma data (ex: Mín., Méd., Máx.), cria índice composto
+        if len(df_ano.columns) > 1:
+            segunda_col = df_ano.columns[1]
+            # Verifica se a segunda coluna parece ser estatística
+            if df_ano[segunda_col].dtype == 'object':
+                amostra_segunda = df_ano[segunda_col].dropna().head(10).astype(str).str.lower()
+                if any(x in ' '.join(amostra_segunda) for x in ['mín', 'méd', 'máx', 'min', 'med', 'max', 'estatística', 'estatistica']):
+                    print(f"  - Detectada coluna de estatística: '{segunda_col}'")
+                    # Cria índice composto: (data, estatistica)
+                    df_ano['_temp_stat'] = df_ano[segunda_col]
+                    # Primeiro define a data como índice temporário
+                    df_ano.set_index(coluna_data, inplace=True)
+                    # Depois cria índice composto
+                    df_ano.index = pd.MultiIndex.from_arrays([df_ano.index, df_ano['_temp_stat']], names=['Data', segunda_col])
+                    df_ano.drop('_temp_stat', axis=1, inplace=True)
+                    print(f"  - Criado índice composto com Data e {segunda_col}")
+                else:
+                    # Não é estatística, apenas define data como índice normalmente
+                    df_ano.set_index(coluna_data, inplace=True)
+            else:
+                # Segunda coluna não é texto, apenas define data como índice
+                df_ano.set_index(coluna_data, inplace=True)
+        else:
+            # Só tem uma coluna, define data como índice
+            df_ano.set_index(coluna_data, inplace=True)
+        
+        # DIAGNÓSTICO: Verifica se há índices duplicados
+        if isinstance(df_ano.index, pd.MultiIndex):
+            # Para MultiIndex, verifica duplicados no primeiro nível (data)
+            duplicados = df_ano.index.get_level_values(0).duplicated().sum()
+        else:
+            duplicados = df_ano.index.duplicated().sum()
+        
+        if duplicados > 0:
+            print(f"  - AVISO: {duplicados} índices duplicados encontrados!")
+            # Mostra exemplos de datas duplicadas
+            if isinstance(df_ano.index, pd.MultiIndex):
+                indices_dup = df_ano.index.get_level_values(0)[df_ano.index.get_level_values(0).duplicated(keep=False)].unique()[:5]
+            else:
+                indices_dup = df_ano.index[df_ano.index.duplicated(keep=False)].unique()[:5]
+            print(f"  - Exemplos de datas duplicadas: {indices_dup}")
+        
+        # Remove colunas completamente vazias
+        df_ano.dropna(axis=1, how='all', inplace=True)
+        
+        total_linhas_esperadas += linhas_depois
+        print(f"  - Após processamento: {df_ano.shape[0]} linhas x {df_ano.shape[1]} colunas")
+        print(f"  - Período: {df_ano.index.min()} até {df_ano.index.max()}")
+        print(f"  - Datas únicas: {df_ano.index.nunique()} (de {len(df_ano)} linhas totais)")
+        
+        dataframes_anuais.append(df_ano)
+        
+    except Exception as e:
+        print(f"  ERRO ao processar planilha {ano_planilha}: {e}")
+        import traceback
+        traceback.print_exc()
+        continue
+
+if not dataframes_anuais:
+    print("\nERRO: Nenhuma planilha anual foi processada com sucesso!")
+    exit()
+
+# Concatena todos os DataFrames anuais
+print(f"\nConcatenando {len(dataframes_anuais)} planilhas anuais...")
+print(f"Total de linhas esperadas (soma de todas as planilhas): {total_linhas_esperadas}")
+
+df = pd.concat(dataframes_anuais, axis=0, sort=False)
+
+# DIAGNÓSTICO: Verifica se há índices duplicados após concatenação
+if isinstance(df.index, pd.MultiIndex):
+    duplicados_final = df.index.get_level_values(0).duplicated().sum()
+else:
+    duplicados_final = df.index.duplicated().sum()
+
+if duplicados_final > 0:
+    print(f"AVISO: {duplicados_final} índices duplicados encontrados após concatenação!")
+    print(f"  - Isso pode causar perda de dados se não for tratado.")
+
+# Ordena por data (índice)
+df.sort_index(inplace=True)
+
+print(f"\nDataFrame CONCATENADO tem {df.shape[0]} linhas e {df.shape[1]} colunas.")
+print(f"Período total: {df.index.min()} até {df.index.max()}")
+print(f"Datas únicas no índice: {df.index.nunique()}")
+
+# DIAGNÓSTICO: Verifica se há gaps nas datas
+if len(df) > 0:
+    print(f"\nVerificando continuidade das datas...")
+    
+    # Extrai apenas as datas (primeiro nível do MultiIndex se for o caso)
+    if isinstance(df.index, pd.MultiIndex):
+        datas_unicas = sorted(df.index.get_level_values(0).unique())
+    else:
+        datas_unicas = sorted(df.index.unique())
+    
+    print(f"  - Primeira data: {datas_unicas[0]}")
+    print(f"  - Última data: {datas_unicas[-1]}")
+    print(f"  - Total de meses únicos: {len(datas_unicas)}")
+    
+    # Verifica gaps maiores que 1 mês
+    from dateutil.relativedelta import relativedelta
+    gaps = []
+    for i in range(len(datas_unicas) - 1):
+        diff = (datas_unicas[i+1] - datas_unicas[i]).days
+        if diff > 35:  # Mais de ~1 mês
+            gaps.append((datas_unicas[i], datas_unicas[i+1], diff))
+    
+    if gaps:
+        print(f"  - AVISO: Encontrados {len(gaps)} gaps maiores que 1 mês:")
+        for gap in gaps[:10]:  # Mostra primeiros 10
+            print(f"      Entre {gap[0]} e {gap[1]} ({gap[2]} dias)")
+
+# ============================================================================
+# ETAPA 2: PROCESSAR PLANILHA DE DADOS ANUAIS (SEPARADAMENTE)
+# ============================================================================
+df_dados_anuais = None
+if planilha_dados_anuais:
+    print("\n" + "="*60)
+    print("PROCESSANDO PLANILHA DE DADOS ANUAIS")
+    print("="*60)
+    try:
+        df_dados_anuais = pd.read_excel(caminho_completo_excel, sheet_name=planilha_dados_anuais)
+        print(f"  - Planilha original: {df_dados_anuais.shape[0]} linhas x {df_dados_anuais.shape[1]} colunas")
+        
+        # Remove colunas completamente vazias
+        df_dados_anuais.dropna(axis=1, how='all', inplace=True)
+        print(f"  - Após remover colunas vazias: {df_dados_anuais.shape[0]} linhas x {df_dados_anuais.shape[1]} colunas")
+        
+        # Se a primeira coluna for data/ano, tenta converter
+        if len(df_dados_anuais.columns) > 0:
+            primeira_col = df_dados_anuais.columns[0]
+            print(f"  - Primeira coluna: '{primeira_col}'")
+            
+            # Tenta extrair o ano da primeira coluna
+            if df_dados_anuais[primeira_col].dtype == 'object':
+                # Tenta converter para ano (número inteiro)
+                def extrair_ano(valor):
+                    if pd.isna(valor):
+                        return None
+                    try:
+                        # Se já for um número, retorna como está
+                        if isinstance(valor, (int, float)):
+                            return int(valor)
+                        # Se for string, tenta extrair o ano
+                        valor_str = str(valor).strip()
+                        # Tenta converter diretamente
+                        if valor_str.isdigit():
+                            return int(valor_str)
+                        # Tenta extrair ano de formato "Ano" ou "2009"
+                        # Remove espaços e caracteres não numéricos, pega últimos 4 dígitos
+                        numeros = ''.join(filter(str.isdigit, valor_str))
+                        if len(numeros) >= 4:
+                            return int(numeros[-4:])  # Pega últimos 4 dígitos (ano)
+                        return None
+                    except:
+                        return None
+                
+                linhas_antes = len(df_dados_anuais)
+                df_dados_anuais['_ano_temp'] = df_dados_anuais[primeira_col].apply(extrair_ano)
+                anos_convertidos = df_dados_anuais['_ano_temp'].notna().sum()
+                print(f"  - Anos convertidos: {anos_convertidos} de {linhas_antes}")
+                
+                if anos_convertidos > 0:
+                    # Remove linhas onde não conseguiu converter o ano
+                    df_dados_anuais = df_dados_anuais.dropna(subset=['_ano_temp'])
+                    # Define o ano como índice
+                    df_dados_anuais.set_index('_ano_temp', inplace=True)
+                    df_dados_anuais.index.name = 'Ano'  # Renomeia o índice para 'Ano'
+                    print(f"  - Após processar anos: {df_dados_anuais.shape[0]} linhas x {df_dados_anuais.shape[1]} colunas")
+                else:
+                    print(f"  - AVISO: Nenhum ano pôde ser extraído. Mantendo planilha sem índice de ano.")
+                    # Remove a coluna temporária se não foi usada
+                    if '_ano_temp' in df_dados_anuais.columns:
+                        df_dados_anuais.drop(columns=['_ano_temp'], inplace=True)
+            elif df_dados_anuais[primeira_col].dtype in ['int64', 'float64']:
+                # Se já for numérico, pode ser que já seja o ano
+                print(f"  - Primeira coluna é numérica, usando como ano.")
+                df_dados_anuais.set_index(primeira_col, inplace=True)
+                df_dados_anuais.index.name = 'Ano'
+            else:
+                print(f"  - Primeira coluna não é texto nem número, mantendo como está.")
+        
+        print(f"  - Planilha final: {df_dados_anuais.shape[0]} linhas x {df_dados_anuais.shape[1]} colunas")
+        
+        # Se ficou vazia, avisa mas mantém para salvar mesmo assim
+        if df_dados_anuais.empty:
+            print(f"  - AVISO: Planilha ficou vazia após processamento, mas será salva mesmo assim.")
+        
+    except Exception as e:
+        print(f"  ERRO ao processar planilha de dados anuais: {e}")
+        import traceback
+        traceback.print_exc()
+        df_dados_anuais = None
+
+# ============================================================================
+# DIAGNÓSTICO (OPCIONAL)
+# ============================================================================
+EXECUTAR_DIAGNOSTICO = True
+
+if EXECUTAR_DIAGNOSTICO:
+    print("\n" + "="*60)
+    print("EXECUTANDO DIAGNÓSTICO")
+    print("="*60)
+    
+    print(f"\nTotal de linhas: {len(df)}")
+    print(f"Total de colunas: {len(df.columns)}")
+    print(f"\nPrimeiras 5 colunas: {list(df.columns[:5])}")
+    print(f"\nPrimeiras 3 linhas:")
+    print(df.head(3))
+    
+    print(f"\n{'='*60}")
+    print("Colunas que começam tardiamente (vazias nas primeiras 10%):")
+    print(f"{'='*60}")
+    primeiras_linhas = max(1, int(len(df) * 0.10))
+    colunas_tardias_diag = []
+    for col in df.columns:
+        faltantes = df[col].head(primeiras_linhas).isnull().sum()
+        if faltantes == primeiras_linhas:
+            primeira_data = df[col].first_valid_index()
+            # Se for MultiIndex, extrai apenas a data
+            if isinstance(primeira_data, tuple):
+                primeira_data = primeira_data[0]
+            colunas_tardias_diag.append(col)
+            print(f"  - {col}: começa em {primeira_data}")
+    
+    if not colunas_tardias_diag:
+        print("  Nenhuma coluna identificada como tardia.")
+    else:
+        print(f"\nTotal de colunas tardias encontradas: {len(colunas_tardias_diag)}")
+    
+    print(f"\n{'='*60}\n")
+
+# ============================================================================
+# ETAPA 3: IDENTIFICAR VARIÁVEIS 'CORE' E 'TARDIAS'
+# ============================================================================
+print("\n" + "="*60)
+print("IDENTIFICANDO VARIÁVEIS 'CORE' E 'TARDIAS'")
+print("="*60)
+
+limiar_inicio_vazio = 0.10
+linhas_iniciais_para_checar = max(1, int(len(df) * limiar_inicio_vazio))
+df_inicio = df.head(linhas_iniciais_para_checar)
+
+# Identifica colunas que estão COMPLETAMENTE vazias nas primeiras linhas
+colunas_tardias_lista = list(df_inicio.columns[df_inicio.isnull().all()])
+colunas_core_lista = [col for col in df.columns if col not in colunas_tardias_lista]
+
+print(f"  - Verificando primeiras {linhas_iniciais_para_checar} linhas de {len(df)} totais")
+print(f"  - {len(colunas_core_lista)} Variáveis 'Core' identificadas.")
+print(f"  - {len(colunas_tardias_lista)} Variáveis 'Tardias' identificadas.")
+
+if colunas_tardias_lista:
+    if len(colunas_tardias_lista) > 5:
+        print(f"  - Variáveis Tardias (primeiras 5): {colunas_tardias_lista[:5]}")
+    else:
+        print(f"  - Variáveis Tardias: {colunas_tardias_lista}")
+
+# ============================================================================
+# ETAPA 4: MAPEAMENTO CRONOLÓGICO E GERAÇÃO DE PLANILHAS
+# ============================================================================
+print("\n" + "="*60)
+print("GERANDO ARQUIVO EXCEL COM PLANILHAS GRADUAIS")
+print("="*60)
+
+# Sempre salvar em novo arquivo: adiciona timestamp ao nome para evitar sobrescrita.
+output_path = os.path.abspath(caminho_final_excel)
+base, ext = os.path.splitext(output_path)
+timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+caminho_final_excel_usar = f"{base}_{timestamp}{ext}"
+print(f"\n  - Salvando sempre em novo arquivo: '{caminho_final_excel_usar}'")
+
+# Identifica o nome da coluna de estatística (se existir no MultiIndex)
+nome_coluna_estatistica = None
+if isinstance(df.index, pd.MultiIndex):
+    if len(df.index.names) > 1:
+        nome_coluna_estatistica = df.index.names[1]
+
+with pd.ExcelWriter(caminho_final_excel_usar, engine='openpyxl') as writer:
+    
+    # 1. Escreve a planilha com os dados 'Core'
+    df_core = df[colunas_core_lista].copy()
+    df_core.dropna(how='all', inplace=True)  # Remove linhas completamente vazias
+    
+    if not df_core.empty:
+        # Remove coluna de estatística se existir como coluna (já está no índice)
+        if nome_coluna_estatistica and nome_coluna_estatistica in df_core.columns:
+            df_core = df_core.drop(columns=[nome_coluna_estatistica])
+        
+        df_core.to_excel(writer, sheet_name='dados_core', index=True)
+        
+        # Formata as datas no Excel
+        worksheet = writer.sheets['dados_core']
+        if isinstance(df_core.index, pd.MultiIndex):
+            # Para MultiIndex, formata apenas a primeira coluna (data)
+            for row in range(2, len(df_core) + 2):  # Começa na linha 2 (linha 1 é cabeçalho)
+                cell = worksheet.cell(row=row, column=1)
+                if cell.value:
+                    cell.number_format = 'DD/MM/YYYY'
+        else:
+            # Para índice simples, formata a coluna de data
+            for row in range(2, len(df_core) + 2):
+                cell = worksheet.cell(row=row, column=1)
+                if cell.value:
+                    cell.number_format = 'DD/MM/YYYY'
+        
+        print(f"\n  - Planilha 'dados_core' criada com {df_core.shape[1]} variáveis e {df_core.shape[0]} linhas.")
+        if isinstance(df_core.index, pd.MultiIndex):
+            primeira_data = df_core.index.get_level_values(0)[0]
+            ultima_data = df_core.index.get_level_values(0)[-1]
+        else:
+            primeira_data = df_core.index[0]
+            ultima_data = df_core.index[-1]
+        print(f"    (Dados de {primeira_data.strftime('%d/%m/%Y')} até {ultima_data.strftime('%d/%m/%Y')})")
+    else:
+        print("\n  - AVISO: Planilha 'dados_core' está vazia.")
+    
+    # 2. Cria planilhas incrementais para variáveis tardias
+    if colunas_tardias_lista:
+        # Mapeia datas de início de cada variável tardia
+        datas_de_inicio = {}
+        for col in colunas_tardias_lista:
+            primeira_data_valida = df[col].first_valid_index()
+            if primeira_data_valida is not None:
+                # Se for MultiIndex, extrai apenas a data (primeiro elemento)
+                if isinstance(primeira_data_valida, tuple):
+                    data_para_mapear = primeira_data_valida[0]
+                else:
+                    data_para_mapear = primeira_data_valida
+                
+                if data_para_mapear not in datas_de_inicio:
+                    datas_de_inicio[data_para_mapear] = []
+                datas_de_inicio[data_para_mapear].append(col)
+        
+        # Ordena as datas de início
+        datas_ordenadas = sorted(datas_de_inicio.keys())
+        
+        print(f"\n  - Encontradas {len(datas_ordenadas)} datas distintas de introdução de variáveis:")
+        for data in datas_ordenadas[:10]:  # Mostrar primeiras 10
+            print(f"    * {data.strftime('%d/%m/%Y')}: {len(datas_de_inicio[data])} variáveis - {', '.join(datas_de_inicio[data][:3])}")
+        
+        # Loop para criar as planilhas incrementais
+        colunas_acumuladas = colunas_core_lista.copy()
+        
+        for data_inicio in datas_ordenadas:
+            novas_colunas_na_onda = datas_de_inicio[data_inicio]
+            colunas_acumuladas.extend(novas_colunas_na_onda)
+            
+            # Cria nome da planilha baseado nas variáveis introduzidas
+            # Limita o tamanho do nome (Excel tem limite de 31 caracteres)
+            nomes_variaveis = [col[:20] for col in novas_colunas_na_onda[:3]]  # Pega primeiras 3, limita a 20 chars cada
+            if len(novas_colunas_na_onda) > 3:
+                nome_planilha = '_'.join(nomes_variaveis) + f"_+{len(novas_colunas_na_onda)-3}mais"
+            else:
+                nome_planilha = '_'.join(nomes_variaveis)
+            
+            # Remove caracteres inválidos para nome de planilha Excel
+            nome_planilha = nome_planilha.replace('/', '_').replace('\\', '_').replace('?', '_').replace('*', '_').replace('[', '_').replace(']', '_').replace(':', '_')
+            
+            # Limita a 31 caracteres (limite do Excel)
+            if len(nome_planilha) > 31:
+                nome_planilha = nome_planilha[:28] + "..."
+            
+            # Garante que o nome seja único (adiciona sufixo se necessário)
+            nome_planilha_original = nome_planilha
+            contador = 1
+            while nome_planilha in writer.sheets:
+                nome_planilha = f"{nome_planilha_original[:25]}_{contador}"
+                contador += 1
+            
+            # Cria o DataFrame para a planilha, fatiando a partir da data de início
+            # Se for MultiIndex, precisa usar apenas a data para o slice
+            if isinstance(df.index, pd.MultiIndex):
+                # Para MultiIndex, usa apenas o primeiro nível (data) para o slice
+                df_planilha = df.loc[df.index.get_level_values(0) >= data_inicio][colunas_acumuladas].copy()
+            else:
+                df_planilha = df.loc[data_inicio:][colunas_acumuladas].copy()
+            
+            # Remove coluna de estatística se existir como coluna (já está no índice)
+            if nome_coluna_estatistica and nome_coluna_estatistica in df_planilha.columns:
+                df_planilha = df_planilha.drop(columns=[nome_coluna_estatistica])
+            
+            # Remove colunas completamente vazias nesta planilha específica
+            # (variáveis que ainda não começaram a ter dados nesta data)
+            colunas_antes = len(df_planilha.columns)
+            df_planilha.dropna(axis=1, how='all', inplace=True)
+            colunas_depois = len(df_planilha.columns)
+            
+            if colunas_antes != colunas_depois:
+                print(f"    (Removidas {colunas_antes - colunas_depois} colunas vazias nesta planilha)")
+            
+            # Remove apenas linhas completamente vazias
+            df_planilha.dropna(how='all', inplace=True)
+            
+            # Verificar se não está vazia
+            if df_planilha.empty:
+                print(f"  - AVISO: Planilha '{nome_planilha}' está vazia e será pulada.")
+                continue
+            
+            df_planilha.to_excel(writer, sheet_name=nome_planilha, index=True)
+            
+            # Formata as datas no Excel
+            worksheet = writer.sheets[nome_planilha]
+            if isinstance(df_planilha.index, pd.MultiIndex):
+                # Para MultiIndex, formata apenas a primeira coluna (data)
+                for row in range(2, len(df_planilha) + 2):
+                    cell = worksheet.cell(row=row, column=1)
+                    if cell.value:
+                        cell.number_format = 'DD/MM/YYYY'
+            else:
+                # Para índice simples, formata a coluna de data
+                for row in range(2, len(df_planilha) + 2):
+                    cell = worksheet.cell(row=row, column=1)
+                    if cell.value:
+                        cell.number_format = 'DD/MM/YYYY'
+            
+            print(f"  - Planilha '{nome_planilha}' criada com {df_planilha.shape[1]} variáveis e {df_planilha.shape[0]} linhas.")
+            if not df_planilha.empty:
+                if isinstance(df_planilha.index, pd.MultiIndex):
+                    primeira_data = df_planilha.index.get_level_values(0)[0]
+                    ultima_data = df_planilha.index.get_level_values(0)[-1]
+                else:
+                    primeira_data = df_planilha.index[0]
+                    ultima_data = df_planilha.index[-1]
+                print(f"    (Dados de {primeira_data.strftime('%d/%m/%Y')} até {ultima_data.strftime('%d/%m/%Y')})")
+                print(f"    Variáveis introduzidas: {', '.join(novas_colunas_na_onda)}")
+    
+    # 3. Adiciona planilha de dados anuais (se existir)
+    if df_dados_anuais is not None:
+        # Salva mesmo se estiver vazia (pode ser útil para verificar)
+        df_dados_anuais.to_excel(writer, sheet_name='dados_anuais', index=True)
+        
+        # Formata a coluna de ano no Excel (se houver)
+        if not df_dados_anuais.empty:
+            worksheet = writer.sheets['dados_anuais']
+            # Se o índice for numérico (ano), formata como número inteiro
+            if df_dados_anuais.index.dtype in ['int64', 'float64']:
+                for row in range(2, len(df_dados_anuais) + 2):
+                    cell = worksheet.cell(row=row, column=1)
+                    if cell.value:
+                        # Formata como número inteiro (sem casas decimais)
+                        cell.number_format = '0'
+        
+        if df_dados_anuais.empty:
+            print(f"\n  - Planilha 'dados_anuais' criada (vazia) - verifique o processamento.")
+        else:
+            print(f"\n  - Planilha 'dados_anuais' criada com {df_dados_anuais.shape[1]} variáveis e {df_dados_anuais.shape[0]} linhas.")
+            if df_dados_anuais.index.dtype in ['int64', 'float64']:
+                print(f"    (Anos: {int(df_dados_anuais.index.min())} até {int(df_dados_anuais.index.max())})")
+                
+print(f"\n{'='*60}")
+if caminho_final_excel_usar != os.path.abspath(caminho_final_excel):
+    print(f"Sucesso! O arquivo final foi salvo em '{caminho_final_excel_usar}'")
+else:
+    print(f"Sucesso! O arquivo final foi salvo em '{caminho_final_excel}'")
+print(f"{'='*60}")

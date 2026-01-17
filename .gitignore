@@ -12,4 +12,9 @@ Reuniões/
 *.xlsx
 *.csv
 *.log
+
+# Ignorar atalhos do Google Drive
 *.gdoc
+*.gsheet
+*.gslides
+*.gdraw

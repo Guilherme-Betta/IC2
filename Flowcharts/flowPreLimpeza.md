@@ -1,35 +1,48 @@
 ```mermaid
-graph TD
-    A["Início: Arquivo 'dadosLargos.xlsx'"] --> B{"Ler Planilhas"};
-    B -->|"Planilhas '2009'-'2024'"| C["Loop: Processar Anos"];
-    B -->|"Planilha 'DadosAnuais'"| D["Processar Separado"];
+flowchart TD
+    %% Nós Iniciais
+    Start([Início: Arquivo 'dadosLargos.xlsx']) --> CheckType{Ler Planilhas}
     
-    subgraph "Tratamento Mensal (Loop)"
-    C --> C1["Ler Aba"];
-    C1 --> C2["Converter Datas 'pt-BR'"];
-    C2 --> C3{"Tem Coluna Extra?"};
-    C3 -->|Sim| C4["Criar MultiIndex (Data, Estatística)"];
-    C3 -->|Não| C5["Index Simples (Data)"];
-    C4 & C5 --> C6["Remover Colunas Vazias"];
+    %% Ramificações
+    CheckType -->|Planilhas '2009'-'2024'| LoopMensal[Loop: Processar Anos]
+    CheckType -->|Planilha 'DadosAnuais'| ProcAnual[Processar Separado]
+    
+    %% Subgráfico: Tratamento Mensal
+    subgraph Tratamento [Tratamento Mensal - Função ler_e_limpar]
+        direction TB
+        LoopMensal --> ReadSheet[Ler Aba]
+        ReadSheet --> ConvertDate[Converter Datas 'pt-BR']
+        ConvertDate --> HasExtra{Tem Coluna<br/>Extra?}
+        
+        HasExtra -- Sim --> MultiIdx[MultiIndex<br/>Data + Estatística]
+        HasExtra -- Não --> SingleIdx[Index Simples<br/>Data]
+        
+        MultiIdx & SingleIdx --> DropEmpty[Remover Colunas Vazias]
     end
     
-    C6 --> E["Concatenar Tudo (pd.concat)"];
-    E --> F["Identificar Variáveis: Core vs Tardias"];
+    DropEmpty --> Concat[Concatenar Tudo<br/>pd.concat]
+    Concat --> IdentVars[Identificar Variáveis:<br/>Core vs Tardias]
     
-    subgraph "Geração de Saída (Loop)"
-    F --> G1["Salvar 'dados_core'"];
-    F --> G2["Iterar Datas de Início das Tardias"];
-    G2 --> G3["Filtrar Dados >= Data Início"];
-    G3 --> G4["Gerar Nome Descritivo"];
-    G4 --> G5["Salvar Aba Incremental"];
+    %% Subgráfico: Geração de Saída
+    subgraph Saida [Geração de Saída - Loop]
+        direction TB
+        IdentVars --> SaveCore[Salvar aba 'dados_core']
+        IdentVars --> IterDates[Iterar Datas de<br/>Início das Tardias]
+        IterDates --> FilterData[Filtrar Dados >= Data Início]
+        FilterData --> GenName[Gerar Nome Descritivo]
+        GenName --> SaveInc[Salvar Aba Incremental]
     end
     
-    D --> H["Limpar e Definir Índice 'Ano'"];
-    H --> I["Salvar Aba 'dados_anuais'"];
+    %% Caminho Anual
+    ProcAnual --> CleanAnual[Limpar e Definir Índice 'Ano']
+    CleanAnual --> SaveAnual[Salvar Aba 'dados_anuais']
     
-    G1 & G5 & I --> J["FIM: 'dados_analiticos_graduais.xlsx'"];
+    %% Finalização
+    SaveCore & SaveInc & SaveAnual --> End([FIM: Arquivo com Timestamp])
     
-    style A fill:#f9f,stroke:#333,stroke-width:2px
-    style J fill:#9f9,stroke:#333,stroke-width:2px
-    style E fill:#bbf,stroke:#333
+    %% Estilização (Opcional - Cores suaves)
+    style Start fill:#2c3e50,stroke:#333,color:#fff
+    style End fill:#2c3e50,stroke:#333,color:#fff
+    style Concat fill:#e67e22,stroke:#333,color:#fff
+    style IdentVars fill:#e67e22,stroke:#333,color:#fff
  ```

@@ -1,1 +1,30 @@
-print("Hello, World!")
+import pandas as pd
+
+# 1. Criando um exemplo de base de dados similar à sua
+data = {
+    'ID': [1, 1, 1, 2, 2, 2],
+    'Estatística': ['Mínimo', 'Média', 'Máximo', 'Mínimo', 'Média', 'Máximo'],
+    'Temperatura': [20, 25, 30, 15, 18, 22],
+    'Umidade': [40, 50, 60, 70, 75, 80]
+}
+
+df = pd.DataFrame(data)
+
+print("--- Base Original ---")
+print(df)
+
+# 2. Transformando a coluna "Estatística" em novas colunas
+# index: Colunas que NÃO vão mudar (as que identificam a linha)
+# columns: A coluna cujos valores se tornarão os novos nomes das colunas
+# values: As colunas que contêm os números que queremos reorganizar
+df_pivot = df.pivot(index='ID', columns='Estatística', values=['Temperatura', 'Umidade'])
+
+# 3. Ajustando os nomes das colunas (Opcional, mas recomendado)
+# O pivot gera nomes em dois níveis. Vamos juntá-los para ficar "Temperatura_Mínimo", etc.
+df_pivot.columns = [f"{col[0]}_{col[1]}" for col in df_pivot.columns]
+
+# 4. Resetando o index para que o 'ID' volte a ser uma coluna comum
+df_resultado = df_pivot.reset_index()
+
+print("\n--- Base Transformada (Wide) ---")
+print(df_resultado)

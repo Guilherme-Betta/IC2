@@ -23,6 +23,4 @@ msno.dendrogram(dados)  # Gera um dendograma
 
 ### Cálculo de dados faltantes
 
-
-
 # print(dados)

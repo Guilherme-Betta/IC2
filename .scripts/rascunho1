@@ -10,6 +10,14 @@ dados = pd.read_excel(arquivo_entrada)
 
 # contagem = dados['COR'].value_counts().plot(kind='kde')
 
-print(dados['COR'].shape)
+variaveis = [colunas for colunas in dados.columns if colunas not in 'Estatistica' + 'Data']
 
-#for coluna in dados:
+contador_NaN = dict.fromkeys(variaveis, 0)  # Cria uma biblioteca para guardar o número de dados faltantes em cada variavel
+contador_gen = dict.fromkeys(variaveis, 0)  # Cria uma biblioteca para guardar o número de dados não numéricos em cada variavel
+
+# print(contador_gen['COR'], contador_NaN['COR'])
+
+print(dados.loc[dados['COR'] == 'NaN'].unique())
+"""
+for col in variaveis:
+    dados.loc[dados[col] == 'NaN'].value_counts"""

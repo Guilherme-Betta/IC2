@@ -1,5 +1,6 @@
 import pandas as pd
 import missingno as msno
+import matplotlib.pyplot as plt
 
 arquivo_entrada = input("Insira o caminho da Pasta: ") # Gera uma prompt para o usuário inserir o diretório do arquivo que será alterado
 arquivo_entrada = arquivo_entrada.strip('"').replace('\\', '/') # Altera o texto inserido para que o python consiga ler
@@ -7,8 +8,21 @@ arquivo_entrada = arquivo_entrada.strip('"').replace('\\', '/') # Altera o texto
 dados = pd.ExcelFile(arquivo_entrada)
 dados = pd.read_excel(arquivo_entrada)
 
-matriz = msno.matrix(dados)
+### Geração de visualizações
 
-print(matriz)
+msno.matrix(dados)  # Gera uma matriz representando dados faltantes/coluna
+#plt.show() # Abre uma janela no computador com a visualização
+
+msno.bar(dados) # Gera um gráfico de barras
+
+msno.heatmap(dados) # Gera um mapa de calor
+
+msno.dendrogram(dados)  # Gera um dendograma
+
+# plt.show()
+
+### Cálculo de dados faltantes
+
+
 
 # print(dados)

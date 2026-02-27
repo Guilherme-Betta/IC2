@@ -1,6 +1,15 @@
-# Source - https://stackoverflow.com/a
-# Posted by wpercy, modified by community. See post 'Timeline' for change history
-# Retrieved 2025-12-08, License - CC BY-SA 4.0
+import pandas as pd
+import missingno as msno
+import matplotlib.pyplot as plt
 
-import sys
-print(sys.prefix)
+arquivo_entrada = "C:\\_Master\\Google Drive\\Faculdade\\IC2\\Dados\\dadosBrutos.xlsx" # Gera uma prompt para o usuário inserir o diretório do arquivo que será alterado
+arquivo_entrada = arquivo_entrada.strip('"').replace('\\', '/') # Altera o texto inserido para que o python consiga ler
+
+dados = pd.ExcelFile(arquivo_entrada)
+dados = pd.read_excel(arquivo_entrada)
+
+# contagem = dados['COR'].value_counts().plot(kind='kde')
+
+print(dados['COR'].shape)
+
+#for coluna in dados:

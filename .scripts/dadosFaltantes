@@ -1,0 +1,14 @@
+import pandas as pd
+import missingno as msno
+
+arquivo_entrada = input("Insira o caminho da Pasta: ") # Gera uma prompt para o usuário inserir o diretório do arquivo que será alterado
+arquivo_entrada = arquivo_entrada.strip('"').replace('\\', '/') # Altera o texto inserido para que o python consiga ler
+
+dados = pd.ExcelFile(arquivo_entrada)
+dados = pd.read_excel(arquivo_entrada)
+
+matriz = msno.matrix(dados)
+
+print(matriz)
+
+# print(dados)

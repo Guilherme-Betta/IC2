@@ -1,0 +1,22 @@
+import pandas as pd
+import os 
+from datetime import datetime
+
+dadosBrutos = pd.read_excel('data\\in\\dadosBrutosProntos.xlsx')
+
+describe = dadosBrutos.describe()
+
+# for col in dadosBrutos.columns:
+#     nao_numericos = {col: 0}
+
+print(dadosBrutos.head())
+
+# pasta_saida = "data\out" # Cria uma variável para guardar o caminho de onde o arquivo resultante será salvo
+
+# os.makedirs(pasta_saida, exist_ok=True) # Passo necessário para o python salvar o arquivo
+
+# nome_arquivo = f"describe()_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx" # Gera o nome do arquivo de saida com timestamp de quando foi criado
+
+# caminho_saida = os.path.join(pasta_saida, nome_arquivo) # Cria o diretório para salvar o arquivo caso ela ainda não exista
+
+# describe.to_excel(caminho_saida, engine='openpyxl', index=True) # Gera o arquivo de saida

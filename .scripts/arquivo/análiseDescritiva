@@ -5,7 +5,7 @@ import os
 # --- CONFIGURAÇÃO ---
 caminho_da_pasta = input("Insira aqui o caminho da pasta onde estão os arquivos: ").strip('"').replace('\\', '/')
 
-# 1. Arquivo de ENTRADA (gerado pelo nosso script de limpeza)
+# 1. Arquivo de ENTRADA (gerado pelo script de limpeza)
 nome_do_arquivo_analitico = input("Insira o nome do arquivo analítico (ex: dados_analiticos_graduais_YYYYMMDD_HHMMSS.xlsx): ")
 
 # 2. Arquivo de SAÍDA (o relatório que será gerado)
@@ -29,7 +29,7 @@ except FileNotFoundError:
     exit()
 
 # --- ETAPA 2: LOOP PARA ANALISAR CADA PLANILHA ---
-# Vamos armazenar os resultados (os DataFrames de resumo) em um dicionário
+# Armazena os resultados (os DataFrames de resumo) em um dicionário
 resultados_descritivos = {}
 
 print("\nProcessando cada planilha...")

@@ -1,0 +1,92 @@
+import pandas as pd
+import missingno as msno
+import matplotlib.pyplot as plt
+import numpy as np
+from sklearn.preprocessing import StandardScaler
+from sklearn.impute import KNNImputer
+from pyod.models.knn import KNN
+from pyod.models.iforest import IForest
+from pyod.models.lof import LOF
+from pyod.utils.utility import standardizer
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.metrics import mean_squared_error
+
+arquivo_entrada = input("Insira o caminho da Pasta: ") # Gera uma prompt para o usuário inserir o diretório do arquivo que será alterado
+arquivo_entrada = arquivo_entrada.strip('"').replace('\\', '/') # Altera o texto inserido para que o python consiga ler
+
+dados = pd.ExcelFile(arquivo_entrada)
+dados = pd.read_excel(arquivo_entrada)
+
+### Geração de visualizações
+
+msno.matrix(dados)  # Gera uma matriz representando dados faltantes/coluna
+#plt.show() # Abre uma janela no computador com a visualização
+
+msno.bar(dados) # Gera um gráfico de barras
+
+msno.heatmap(dados) # Gera um mapa de calor
+
+msno.dendrogram(dados)  # Gera um dendograma
+
+# plt.show()
+
+### Porcentagens de dados faltantes
+
+# MAR (Missing at Random) - Faltante Aleatoriamente: é o mais comum em dados climáticos.
+# df de teste: dados de clima de Piracicaba-SP: 14/04/2025 a 14/06/25
+
+
+# Função para calcular o percentual de dados ausentes
+def calculate_missing_percentage(df):
+    missing_by_column = df.isna().sum()
+    total_rows = len(df)
+    missing_percentage_by_column = (missing_by_column / total_rows * 100).round(2)
+    missing_total = df.isna().sum().sum()
+    total_elements = df.size
+    missing_percentage_total = (missing_total / total_elements * 100).round(2)
+    return {
+        'by_column': missing_percentage_by_column,
+        'total': missing_percentage_total
+    }
+
+# Ler o arquivo CSV
+df = pd.read_csv('./dados_piracicaba.csv',
+                 sep=',',
+                 parse_dates=['DAY'],
+                 na_values=[-999.0],
+                 usecols=['DAY', 'T2M', 'RAD', 'RH2M', 'WS2M'])
+
+df.rename(columns={
+    'T2M': 'temperatura',
+    'RAD': 'radiacao',
+    'RH2M': 'umidade',
+    'WS2M': 'velocidade_vento'
+}, inplace=True)
+
+# Definir a coluna 'data' como índice
+df.set_index('DAY', inplace=True)
+
+# Leitura de Dados
+print("Lendo dados climáticos do arquivo CSV...")
+df = pd.read_csv('./dados_piracicaba.csv',
+                sep=',',
+                parse_dates=['DAY'],
+                na_values=[-999.0],
+                usecols=['DAY', 'T2M', 'RAD', 'RH2M', 'WS2M'])
+
+df.rename(columns={
+    'T2M': 'temperatura',
+    'RAD': 'radiacao',
+    'RH2M': 'umidade',
+    'WS2M': 'velocidade_vento'
+}, inplace=True)
+df.set_index('DAY', inplace=True)
+
+# Calcular percentual de dados ausentes por coluna
+missing_info = calculate_missing_percentage(df)
+print("\nPercentual de dados ausentes por coluna:")
+print(missing_info['by_column'])
+print(f"\nPercentual total de dados ausentes: {missing_info['total']}%")
+
+# print(dados)

@@ -22,7 +22,7 @@ def calculate_missing_percentage(df):
 
 calculate_missing_percentage(dados)
 
-dados_ausentes = {'Percentual': by_column,'Total': ['total'] }
+dados_ausentes = {'Percentual': ['by_column'],'Total': ['total'] }
 dados_ausentes = pd.DataFrame(dados_ausentes)
 
 print(dados_ausentes.head())

@@ -12,16 +12,14 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.metrics import mean_squared_error
 
-arquivo_entrada = input("Insira o caminho da Pasta: ") # Gera uma prompt para o usuário inserir o diretório do arquivo que será alterado
-arquivo_entrada = arquivo_entrada.strip('"').replace('\\', '/') # Altera o texto inserido para que o python consiga ler
+arquivo_entrada = 'data\in\dadosBrutosProntos.xlsx'
 
-dados = pd.ExcelFile(arquivo_entrada)
 dados = pd.read_excel(arquivo_entrada)
 
 ### Geração de visualizações
 
 msno.matrix(dados)  # Gera uma matriz representando dados faltantes/coluna
-#plt.show() # Abre uma janela no computador com a visualização
+# plt.show() # Abre uma janela no computador com a visualização
 
 msno.bar(dados) # Gera um gráfico de barras
 

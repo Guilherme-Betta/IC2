@@ -2,14 +2,39 @@ import pandas as pd
 import os 
 from datetime import datetime
 
-dadosBrutos = pd.read_excel('data\\in\\dadosBrutosProntos.xlsx')
+dados = pd.read_excel('data\\in\\dadosBrutosProntos.xlsx')
 
-describe = dadosBrutos.describe()
+describe = dados.describe()
 
-# for col in dadosBrutos.columns:
-#     nao_numericos = {col: 0}
+### Dados Ausentes
 
-print(dadosBrutos.head())
+def calculate_missing_percentage(df):
+    missing_by_column = df.isna().sum()
+    total_rows = len(df)
+    missing_percentage_by_column = (missing_by_column / total_rows * 100).round(2)
+    missing_total = df.isna().sum().sum()
+    total_elements = df.size
+    missing_percentage_total = (missing_total / total_elements * 100).round(2)
+    return {
+        'by_column': missing_percentage_by_column,
+        'total': missing_percentage_total
+    }
+
+calculate_missing_percentage(dados)
+
+dados_ausentes = {'Percentual': by_column,'Total': ['total'] }
+dados_ausentes = pd.DataFrame(dados_ausentes)
+
+print(dados_ausentes.head())
+
+# missing_info = calculate_missing_percentage(dados)
+# print("\nPercentual de dados ausentes por coluna:")
+# print(missing_info['by_column'])
+# print(f"\nPercentual total de dados ausentes: {missing_info['total']}%")
+
+### Dados Não Numéricos
+
+
 
 # pasta_saida = "data\out" # Cria uma variável para guardar o caminho de onde o arquivo resultante será salvo
 

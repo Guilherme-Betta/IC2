@@ -1,9 +1,8 @@
 import pandas as pd
-import matplotlib.pyplot as plt
 
-collisions = pd.read_csv("https://raw.githubusercontent.com/ResidentMario/missingno-data/master/nyc_collision_factors.csv")
+dados = pd.read_excel('data\in\dadosBrutos.xlsx')
 
-import missingno as msno
+for i in dados['Data']:
+    print(dados[['Data'][: :3]], dados.index)
 
-msno.matrix(collisions.sample(250))
-plt.show()
+# print(dados['Data'][100])

@@ -4,9 +4,7 @@ from datetime import datetime
 from pathlib import Path
 
 # Para utilizar caminhos relativos nos jupyter notebooks
-if 'jupyter_notebooks' in os.getcwd():  # Checa se o arquivo é um jupyter notebook
-    os.chdir('..')                      # Move o arquivo root para um nível acima do jupyter notebook, o que deveria
-                                        # permitir utilizar caminhos relativos ao invés de absolutos
+BASE_DIR = Path(__file__).resolve().parent
 
 # Constantes
 METADADOS = ['Data', 'data_normalizada', 'Estatistica']
@@ -29,7 +27,7 @@ def dados(caminho_arquivo):
     metadados = [col for col in METADADOS if col in df.columns]
     variaveis = [col for col in df.columns if col not in metadados]
     
-    return df, metadados, variaveis
+    return df
 
 # Pivot de dataframes
 def pivot(df, metadados, variaveis):

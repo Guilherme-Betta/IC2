@@ -15,6 +15,8 @@ def dados(caminho_arquivo):
     Carrega dados de arquivos Excel, e separa os metadados das variáveis.
 
     caminho_arquivo: Caminho relativo do arquivo no workspace.
+
+    Retorna: (df, metadados, variaveis)
     """
     full_path = BASE_DIR / caminho_arquivo
     # Verifica a existência do arquivo desejado
@@ -28,10 +30,10 @@ def dados(caminho_arquivo):
     metadados = [col for col in METADADOS if col in df.columns]
     variaveis = [col for col in df.columns if col not in metadados]
     
-    return df
+    return df, metadados, variaveis
 
 # Salvamento de arquivos
-def salvar(arquivo, nome_arquivo):
+def salvar(arquivo, nome_arquivo, index=False):
     """
     Salva o arquivo em data/out (no workspace), com timestamp.
 
@@ -51,8 +53,8 @@ def salvar(arquivo, nome_arquivo):
     # Cria o diretório para salvar o arquivo caso ela ainda não exista
     caminho_saida = pasta_saida / nome_arquivo
 
-    # Gera o arquivo de saida, sem a coluna de index, prevenindo colunas de index duplicadas
-    arquivo.to_excel(caminho_saida, engine='openpyxl', index=False)
+    # Gera o arquivo de saida
+    arquivo.to_excel(caminho_saida, engine='openpyxl', index=index)
 
     # Gera uma mensagem para o usuario informando sobre onde o arquivo foi salvo
     print(f"Arquivo salvo em: {caminho_saida}")

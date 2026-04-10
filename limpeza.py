@@ -1,6 +1,28 @@
 import pandas as pd
 from utils import salvar
 
+def prep_brutos(df):
+    """
+    Prepara dados brutos: extrai data normalizada, reseta index, e renomeia.
+    df: DataFrame de dados brutos a serem preparado (deve ter coluna 'Data', com dtype datetime)
+    """
+
+    # Trabalha em uma cópia para evitar modificar o original
+    df = df.copy()
+    
+    # Cria coluna de data normalizada
+    df['data_normalizada'] = df['Data'].dt.date
+    
+    # Move a coluna de data normalizada para a posição 1
+    col = df.pop('data_normalizada')
+    df.insert(1, 'data_normalizada', col)
+    
+    # Reseta index e renomeia a coluna da Index gerada automaticamente pelo pandas
+    df = df.reset_index()
+    df.rename(columns={'index': 'Index'}, inplace=True)
+    
+    return df
+
 def limpeza(df, metadados, variaveis, threshold_missing=0.3, salvar_arquivo=True):
     """
     Remove dados corrompidos e colunas com muitos dados faltantes.

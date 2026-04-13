@@ -2,7 +2,7 @@ import pandas as pd
 import missingno as msno
 import matplotlib.pyplot as plt
 import seaborn as sns
-from utils import salvar_visualizacao
+from utils import salvar_visualizacao, pivot
 
 # Formatação dos boxplots
 cores_customizadas = {      
@@ -58,10 +58,11 @@ def boxplot_estatisticas(df):
 
     cols_max = [coluna for coluna in df.columns if coluna.endswith('Max.')]
 
-    if not cols_max or cols_med or cols_min:
+    if not cols_max and cols_med and cols_min:
         print("Não foram encontradas colunas finalizando com Min., Med. ou Max."
         "Talvez o DataFrames selecionado não esteja pivotado.")
-
+        pass
+    
     # Seleciona colunas com a estatística "Min."
     if not cols_min:
         print("Não foram encontradas colunas *_Min. no DataFrame")
@@ -103,7 +104,7 @@ def boxplot_estatisticas(df):
 
     # Seleciona colunas com a estatística "Max."
     if not cols_max:
-        print("Não foram encontradas colunas *_Min. no DataFrame")
+        print("Não foram encontradas colunas *_Max. no DataFrame")
         pass
     else:
         ax_max = df[cols_max].plot(kind='box',
@@ -137,44 +138,79 @@ def visualizacoes_missingno(df):
     msno.dendrogram(df)  
     salvar_plot('dendogram_msno')
 
-def faltantes_ano(df):
-    """
-    Gera um heatmap de dados faltantes ao longo dos anos.
-    df: DataFrame de interesse.
-    """
-    colunas_data = [coluna for coluna in df.columns if str(df[coluna].dtype).startswith('datetime')]
-    missing_por_ano = (df.drop(columns=colunas_data).groupby(df["Data"].dt.year).apply(lambda x: x.isna().mean()*100))
-    missing_por_ano = missing_por_ano.T 
+# Taxa de faltantes / ano (0 → completo, 1 → tudo faltando)
+def faltantes_ano(df, plot=False):
+   """
+   Gera um heatmap de dados faltantes ao longo dos anos.
 
-    plt.figure(figsize=(18, 10))
-    sns.heatmap(missing_por_ano, cmap="RdBu_r", vmin=0, vmax=100, linewidths=0.5, linecolor="black")
-    plt.title("Taxa de dados faltantes (%) por variável e ano")
-    plt.xlabel("Ano")
-    plt.ylabel("Variável")
-    salvar_plot("faltantes_ano")
+   df: DataFrame de interesse.
+   """
+   # Separa colunas de data numa lista
+   colunas_data = [coluna for coluna in df.columns if str(df[coluna].dtype).startswith('datetime')]
 
-def faltantes_mes(df):
+   missing_por_ano = (df.drop(columns=colunas_data).groupby(df["Data"].dt.year).apply(lambda x: x.isna().mean()*100))
+
+   ## transpor para variáveis ficarem no eixo vertical
+   missing_por_ano = missing_por_ano.T 
+
+   plt.figure(figsize=(18, 10))
+   sns.heatmap(
+      missing_por_ano,
+      cmap="RdBu_r",  # azul = completo | vermelho = faltante
+      vmin=0,
+      vmax=100,
+      linewidths=0.5,
+      linecolor="black"
+   )
+
+   plt.title("Taxa de dados faltantes (%) por variável e ano")
+   plt.xlabel("Ano")
+   plt.ylabel("Variável")
+
+   salvar_plot("faltantes_ano")
+
+   if plot:
+      plt.show()
+
+# Taxa de faltantes / mês
+
+def faltantes_mes(df, plot=False):
     """
     Gera um heatmap de dados faltantes em função dos meses.
+
     df: DataFrame de interesse.
     """
+    # Separa colunas de data numa lista
     colunas_data = [coluna for coluna in df.columns if str(df[coluna].dtype).startswith('datetime')]
+
     missing_meses = (df.drop(columns=colunas_data)).groupby(df['Data'].dt.year).apply(lambda x: x.isna().sum())
+
     missing_meses = missing_meses.T
 
     plt.figure(figsize=(18, 10))
-    sns.heatmap(missing_meses, cmap="RdBu_r", vmin=0, vmax=12, linewidths=0.5, linecolor="black", cbar_kws={"label": "Meses faltantes"})
+    sns.heatmap(
+        missing_meses,
+        cmap="RdBu_r",
+        vmin=0,
+        vmax=12,
+        linewidths=0.5,
+        linecolor="black",
+        cbar_kws={"label": "Meses faltantes"}
+    )
+
     plt.title("Meses faltantes por variável e ano")
     plt.xlabel("Ano")
     plt.ylabel("Variável")
+
     salvar_plot('faltantes_mes')
+
+    if plot:
+        plt.show()
 
 # Todas as visualizações
 
-def visualizacoes_todas(df):
+def visualizacoes_todas(df):    # Gera todas as visualizações, exceto os boxplots de estatísticas
     visualizacoes_missingno(df)
     faltantes_ano(df)
     faltantes_mes(df)
     boxplot_tudo(df)
-    pivot = pivot(df)
-    boxplot_estatisticas(pivot)

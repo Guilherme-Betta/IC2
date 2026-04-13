@@ -33,7 +33,9 @@ def limpeza(df, metadados, variaveis, threshold_missing=0.3, salvar_arquivo=True
     threshold_missing: Remover colunas com % de dados faltantes acima disso (default 30%).
     salvar_arquivo: Salvar resultado (default True).
     
-    Retorna: DataFrame limpo
+    Retorna: 
+    df = DataFrame limpo, 
+    variaveis = Novo conjunto de variáveis 
     """
     # Evita modificar o original
     df = df.copy()  
@@ -45,8 +47,10 @@ def limpeza(df, metadados, variaveis, threshold_missing=0.3, salvar_arquivo=True
     # Remove colunas com dados faltantes acima do threshold
     thresh_count = len(df) * (1 - threshold_missing)
     df = df.dropna(axis=1, thresh=thresh_count)
+
+    variaveis = [col for col in df.columns if col not in metadados]
     
     if salvar_arquivo:
         salvar(df, "dados_limpos")
     
-    return df
+    return df, variaveis

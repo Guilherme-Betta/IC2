@@ -13,7 +13,7 @@ analise_descritiva(dados_brutos, metadados=metadados, variaveis=variaveis)
 visualizacoes_todas(dados_brutos)
 
 # Dados brutos prontos
-dados_prontos = prep_brutos(dados)
+dados_prontos = prep_brutos(dados_brutos)
 
 analise_descritiva(dados_prontos, metadados=metadados, variaveis=variaveis)
 visualizacoes_todas(dados_prontos)
@@ -27,7 +27,7 @@ visualizacoes_todas(dados_limpos)
 # Outliers
 
 ## Z-Score
-remocao_z_score = remove_outliers(dados_limpos, variaveis=variaveis, method=zscore)
+remocao_z_score = remove_outliers(dados_limpos, variaveis=variaveis, method='zscore')
 
 analise_descritiva(remocao_z_score, metadados=metadados, variaveis=variaveis)
 visualizacoes_todas(remocao_z_score)

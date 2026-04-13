@@ -47,29 +47,78 @@ def boxplot_tudo(df):
 
 def boxplot_estatisticas(df):
     """
-    Cria boxplots separados para cada estatística (Min, Med, Max)
+    Cria boxplots separados para cada estatística (Min, Med, MAx)
     """
+
+    # Criando variaveis contendo cada tipo de estatistica (Min, Med, Max)
+
     cols_min = [coluna for coluna in df.columns if coluna.endswith('Min.')] 
+
     cols_med = [coluna for coluna in df.columns if coluna.endswith('Med.')] 
+
     cols_max = [coluna for coluna in df.columns if coluna.endswith('Max.')]
 
-    # Min
-    df[cols_min].plot(kind='box', subplots=True, layout=(6,8), figsize=(20,20), sharey=False, color=cores_customizadas, flierprops=estilo_outliers)
-    plt.suptitle('Distribuição dos valores mínimos de cada variável (Escalas independentes)', fontsize=16, y=1.02)
-    plt.tight_layout()
-    salvar_plot("boxplots_min")
+    if not cols_max or cols_med or cols_min:
+        print("Não foram encontradas colunas finalizando com Min., Med. ou Max."
+        "Talvez o DataFrames selecionado não esteja pivotado.")
 
-    # Med
-    df[cols_med].plot(kind='box', subplots=True, layout=(6,8), figsize=(20,20), sharey=False, color=cores_customizadas, flierprops=estilo_outliers)
-    plt.suptitle('Distribuição dos valores médios de cada variável (Escalas independentes)', fontsize=16, y=1.02)
-    plt.tight_layout()
-    salvar_plot("boxplots_med")
+    # Seleciona colunas com a estatística "Min."
+    if not cols_min:
+        print("Não foram encontradas colunas *_Min. no DataFrame")
+        pass
 
-    # Max
-    df[cols_max].plot(kind='box', subplots=True, layout=(6,8), figsize=(20,20), sharey=False, color=cores_customizadas, flierprops=estilo_outliers)
-    plt.suptitle('Distribuição dos valores máximos de cada variável (Escalas independentes)', fontsize=16, y=1.02)
-    plt.tight_layout()
-    salvar_plot("boxplots_max")
+    else:
+        ax_min = df[cols_min].plot(kind='box',
+                                    subplots=True,
+                                    layout=(6,8),
+                                    figsize=(20,20),
+                                    sharey=False,
+                                    color = cores_customizadas,
+                                    flierprops = estilo_outliers
+                                    )
+        plt.suptitle('Distribuição dos valores mínimos de cada variável (Escalas independentes)', fontsize = 16, y = 1.02)
+
+        plt.tight_layout()
+        
+        salvar_plot("boxplots_min")
+
+    # Seleciona colunas com a estatística "Med."
+    if not cols_med:
+        print("Não foram encontradas colunas *_Med. no DataFrame")
+        pass
+    else:
+        ax_med = df[cols_med].plot(kind='box',
+                                    subplots=True,
+                                    layout=(6,8),
+                                    figsize=(20,20),
+                                    sharey=False,
+                                    color = cores_customizadas,
+                                    flierprops = estilo_outliers
+                                    )
+        plt.suptitle('Distribuição dos valores médios de cada variável (Escalas independentes)', fontsize = 16, y = 1.02)
+
+        plt.tight_layout()
+
+        salvar_plot("boxplots_med")
+
+    # Seleciona colunas com a estatística "Max."
+    if not cols_max:
+        print("Não foram encontradas colunas *_Min. no DataFrame")
+        pass
+    else:
+        ax_max = df[cols_max].plot(kind='box',
+                                    subplots=True,
+                                    layout=(6,8),
+                                    figsize=(20,20),
+                                    sharey=False,
+                                    color = cores_customizadas,
+                                    flierprops = estilo_outliers
+                                    )
+        plt.suptitle('Distribuição dos valores máximos de cada variável (Escalas independentes)', fontsize = 16, y = 1.02)
+
+        plt.tight_layout()
+
+        salvar_plot("boxplots_max")
 
 def visualizacoes_missingno(df):
     """
@@ -120,9 +169,12 @@ def faltantes_mes(df):
     plt.ylabel("Variável")
     salvar_plot('faltantes_mes')
 
+# Todas as visualizações
+
 def visualizacoes_todas(df):
-    boxplot_tudo(df)
-    boxplot_estatisticas(df)
     visualizacoes_missingno(df)
     faltantes_ano(df)
     faltantes_mes(df)
+    boxplot_tudo(df)
+    pivot = pivot(df)
+    boxplot_estatisticas(pivot)

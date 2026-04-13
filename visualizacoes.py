@@ -119,3 +119,10 @@ def faltantes_mes(df):
     plt.xlabel("Ano")
     plt.ylabel("Variável")
     salvar_plot('faltantes_mes')
+
+def visualizacoes_todas(df):
+    boxplot_tudo(df)
+    boxplot_estatisticas(df)
+    visualizacoes_missingno(df)
+    faltantes_ano(df)
+    faltantes_mes(df)

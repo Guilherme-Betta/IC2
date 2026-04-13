@@ -108,7 +108,7 @@ def casas_decimais(coluna):
     # Retorna o valor máximo de dígitos após a casa decimal como integer
     return int(n_decimais.max())
 
-def formatar_variaveis(describe, dados, variaveis):
+def formatar_variaveis(describe, df, variaveis):
     """
     Formata o DataFrame describe com casas decimais baseadas nos dados originais.
     describe: DataFrame de estatísticas.
@@ -126,7 +126,7 @@ def formatar_variaveis(describe, dados, variaveis):
     for col in variaveis:
         
         # 1. A função analisa UMA coluna do banco ORIGINAL por vez
-        casas = casas_decimais(dados[col])
+        casas = casas_decimais(df[col])
 
         # 2. Criacao da regra de formatacao com base na analise do passo anterior (ex: se casas=2, vira "{:.2f}")
         regra_formatacao = f"{{:.{casas}f}}"

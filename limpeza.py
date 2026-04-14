@@ -1,10 +1,12 @@
 import pandas as pd
-from utils import salvar
+from utils import *
 
 def prep_brutos(df):
     """
     Prepara dados brutos: extrai data normalizada, reseta index, e renomeia.
     df: DataFrame de dados brutos a serem preparado (deve ter coluna 'Data', com dtype datetime)
+
+    Retorna: (df, metadados, variaveis)
     """
 
     # Trabalha em uma cópia para evitar modificar o original
@@ -21,21 +23,24 @@ def prep_brutos(df):
     df = df.reset_index()
     df.rename(columns={'index': 'Index'}, inplace=True)
     
-    return df
+    metadados, variaveis = separar_colunas(df)
+    
+    return df, metadados, variaveis
 
 def limpeza(df, metadados, variaveis, threshold_missing=0.3, salvar_arquivo=True):
     """
     Remove dados corrompidos e colunas com muitos dados faltantes.
     
-    df: DataFrame de interesse.
-    metadados: Lista de colunas metadados.
-    variaveis: Lista de colunas variáveis.
-    threshold_missing: Remover colunas com % de dados faltantes acima disso (default 30%).
+    df: DataFrame de interesse;
+    metadados: Lista de colunas metadados;
+    variaveis: Lista de colunas variáveis;
+    threshold_missing: Remover colunas com % de dados faltantes acima disso (default 30%);
     salvar_arquivo: Salvar resultado (default True).
     
     Retorna: 
-    df = DataFrame limpo, 
-    variaveis = Novo conjunto de variáveis 
+    df = DataFrame limpo; 
+    metadados = Novo conjunto de metadados;
+    variaveis = Novo conjunto de variáveis. 
     """
     # Evita modificar o original
     df = df.copy()  
@@ -48,9 +53,9 @@ def limpeza(df, metadados, variaveis, threshold_missing=0.3, salvar_arquivo=True
     thresh_count = len(df) * (1 - threshold_missing)
     df = df.dropna(axis=1, thresh=thresh_count)
 
-    variaveis = [col for col in df.columns if col not in metadados]
+    metadados, variaveis = separar_colunas(df)
     
     if salvar_arquivo:
         salvar(df, "dados_limpos")
     
-    return df, variaveis
+    return df, metadados, variaveis

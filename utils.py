@@ -13,6 +13,8 @@ METADADOS = ['Data', 'data_normalizada', 'Estatistica', 'Index']
 def separar_colunas(df):
     """
     Separa colunas de metadados de colunas de variaveis.
+
+    Retorna: (metadados, variaveis)
     """
     metadados = [col for col in METADADOS if col in df.columns]
     variaveis = [col for col in df.columns if col not in metadados]
@@ -36,8 +38,7 @@ def dados(caminho_arquivo):
         raise FileNotFoundError(f"Arquivo não encontrado: {full_path}")
     
     # Separa os metadados presentes no dataframe das variaveis
-    metadados = [col for col in METADADOS if col in df.columns]
-    variaveis = [col for col in df.columns if col not in metadados]
+    metadados, variaveis = separar_colunas(df)
     
     return df, metadados, variaveis
 

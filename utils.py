@@ -9,6 +9,15 @@ BASE_DIR = Path(__file__).resolve().parent
 # Constantes
 METADADOS = ['Data', 'data_normalizada', 'Estatistica', 'Index']
 
+# Separação de metadados de variáveis
+def separar_colunas(df):
+    """
+    Separa colunas de metadados de colunas de variaveis.
+    """
+    metadados = [col for col in METADADOS if col in df.columns]
+    variaveis = [col for col in df.columns if col not in metadados]
+    return metadados, variaveis
+
 # Leitura de arquivos
 def dados(caminho_arquivo):
     """

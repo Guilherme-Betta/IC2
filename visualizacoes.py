@@ -1,8 +1,10 @@
 import pandas as pd
 import missingno as msno
+import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-from utils import salvar_visualizacao, pivot
+import math
+from utils import *
 
 # Formatação dos boxplots
 cores_customizadas = {      
@@ -21,31 +23,45 @@ estilo_outliers = dict(
 # Função que auxilia no salvamento de figuras
 def salvar_plot(nome):
     salvar_visualizacao(plt.gcf(), nome)
-    plt.show()
     plt.close()
 
-def boxplot_tudo(df):
+# boxplot_tudo
+def boxplot_tudo(df, plot=False, salvar=True):
     """
     Gera boxplots para todas as variáveis numa única figura.
+
     df: Seleciona o dataframe em que se deseja.
+    plot: Seleciona se será gerada uma pré visualiação (default False)
+    salvar: Seleciona se a figura será salva (default True)
     """
     if 'Estatistica' in df.columns:
-        df.boxplot(by='Estatistica',             
-            layout=(5, 6),                  
-            figsize=(20,20),                
-            sharey=False,                 
-            rot=45,                       
-            color=cores_customizadas,     
-            flierprops=estilo_outliers,
-            notch=True,
+        df.boxplot(by='Estatistica',        # Agrupa os dados por Estatística
+            layout=(5, 6),                  # Organiza os boxplots em linhas e colunas
+            figsize=(20,20),                # Determina o tamanho da figura
+            sharey = False,                 # Faz com que diferentes variáveis apresentem diferentes escalas (mais apropriadas para cada uma)
+            rot = 45,                       # Rotaciona os rótulos para evitar sobreposição
+            color = cores_customizadas,     # Aplica as cores escolhidas
+            flierprops = estilo_outliers,
+            notch = True,
             )   
+        # Aplica a formatação dos outliers escolhida
         plt.suptitle('Distribuição das Variáveis por Estatística (Escalas Independentes)', fontsize=16, y=1.02)
+
+        # Ajusta o espaçamento entre os gráficos para não ficarem grudados
         plt.tight_layout()
-        salvar_plot('boxplot_tudo')
+
+        # Mostra a figura
+        if plot:
+            plt.show()
+        
+        # Salva a figura
+        if salvar:
+            salvar_plot('boxplot_tudo')
     else:
         print('Esse dataframe não apresenta coluna \'Estatistica\'. Talvez você tenha usado um dataframe pivotado?')
 
-def boxplot_estatisticas(df):
+# boxplot_estatisticas
+def boxplot_estatisticas(df, plot=False, salvar=True):
     """
     Cria boxplots separados para cada estatística (Min, Med, MAx)
     """
@@ -81,7 +97,11 @@ def boxplot_estatisticas(df):
 
         plt.tight_layout()
         
-        salvar_plot("boxplots_min")
+        if plot:
+            plt.show("boxplots_min")
+
+        if salvar:
+            salvar_plot("boxplots_min")
 
     # Seleciona colunas com a estatística "Med."
     if not cols_med:
@@ -100,7 +120,11 @@ def boxplot_estatisticas(df):
 
         plt.tight_layout()
 
-        salvar_plot("boxplots_med")
+        if plot:
+            plt.show("boxplots_med")
+
+        if salvar:
+            salvar_plot("boxplots_med")
 
     # Seleciona colunas com a estatística "Max."
     if not cols_max:
@@ -119,31 +143,66 @@ def boxplot_estatisticas(df):
 
         plt.tight_layout()
 
-        salvar_plot("boxplots_max")
+        if plot:
+            plt.show("boxplots_max")
 
-def visualizacoes_missingno(df):
+        if salvar:
+            salvar_plot("boxplots_max")
+
+# visualizacoes_missingno
+# Seção biblioteca missingno
+def visualizacoes_missingno(df, plot=False, salvar=True):
     """
     Gera visualizações dos dados faltantes no DataFrame de interesse com os métodos da biblioteca missingno.
-    df: Seleciona o DataFrame de interesse.
+
+    df: Seleciona o dataframe em que se deseja.
+    plot: Seleciona se será gerada uma pré visualiação (default False)
+    salvar: Seleciona se a figura será salva (default True)
     """
-    msno.matrix(df) 
-    salvar_plot("matrix_msno")
+    ## Gera uma matriz representando dados faltantes/coluna
+    msno.matrix(df)
 
+    if salvar:
+        salvar_plot("matrix_msno")
+
+    if not plot:
+        plt.close()
+
+    ## Gera um gráfico de barras
     msno.bar(df) 
-    salvar_plot('bar_msno')
 
+    if salvar:
+        salvar_plot('bar_msno')
+
+    if not plot:
+        plt.close()
+
+    ## Gera um mapa de calor
     msno.heatmap(df) 
-    salvar_plot('heatmap_msno')
 
-    msno.dendrogram(df)  
-    salvar_plot('dendogram_msno')
+    if salvar:
+        salvar_plot('heatmap_msno')
+
+    if not plot:
+        plt.close()
+
+    ## Gera um dendograma
+    msno.dendrogram(df) 
+
+    if salvar: 
+        salvar_plot('dendogram_msno')
+
+    if not plot:
+        plt.close()   
 
 # Taxa de faltantes / ano (0 → completo, 1 → tudo faltando)
-def faltantes_ano(df, plot=False):
+def faltantes_ano(df, plot=False, salvar=True):
    """
    Gera um heatmap de dados faltantes ao longo dos anos.
 
-   df: DataFrame de interesse.
+   df: Seleciona o dataframe em que se deseja.
+   plot: Seleciona se será gerada uma pré visualiação (default False)
+   salvar: Seleciona se a figura será salva (default True)
    """
    # Separa colunas de data numa lista
    colunas_data = [coluna for coluna in df.columns if str(df[coluna].dtype).startswith('datetime')]
@@ -167,14 +226,15 @@ def faltantes_ano(df, plot=False):
    plt.xlabel("Ano")
    plt.ylabel("Variável")
 
-   salvar_plot("faltantes_ano")
+   if salvar:
+      salvar_plot("faltantes_ano")
 
    if plot:
       plt.show()
 
 # Taxa de faltantes / mês
 
-def faltantes_mes(df, plot=False):
+def faltantes_mes(df, plot=False, salvar=True):
     """
     Gera um heatmap de dados faltantes em função dos meses.
 
@@ -202,15 +262,103 @@ def faltantes_mes(df, plot=False):
     plt.xlabel("Ano")
     plt.ylabel("Variável")
 
-    salvar_plot('faltantes_mes')
+    if salvar:
+        salvar_plot('faltantes_mes')
+
+    if plot:
+        plt.show()
+
+# scatter_tudo
+def scatter_tudo(df, plot=False, salvar=True):
+    """
+    Gera scatterplots de todas as variáveis numa única figura.
+
+    df: Seleciona o dataframe em que se deseja.
+    plot: Seleciona se será gerada uma pré visualiação (default False)
+    salvar: Seleciona se a figura será salva (default True)
+    """
+
+    fig, axes = plt.subplots(nrows=math.ceil(len(variaveis) / 4), 
+                            ncols=4,
+                            figsize=(20, 20))
+    axes = axes.flatten()
+
+    for i, col in enumerate(variaveis):
+        sns.scatterplot(
+            data=df,
+            x='data_normalizada',
+            y=col,
+            hue='Estatistica',
+            ax=axes[i]
+        )
+        axes[i].set_title(f'{col}')
+
+    handles, labels = axes[0].get_legend_handles_labels()
+
+    fig.legend(handles, labels, 
+               loc='upper center', 
+               bbox_to_anchor=(0.5, 0.97),
+                ncol=3,
+                title='Estatística',
+                fontsize=12,
+                title_fontsize=14)
+    
+    for ax in axes:
+        legenda = ax.get_legend()
+        if legenda is not None:
+            legenda.remove()
+
+    for j in range(len(variaveis), len(axes)):
+        fig.delaxes(axes[j])
+
+    plt.suptitle('Scatterplots agrupados por Estatística (Escalas independentes)', 
+                 fontsize=16,
+                 y=1.0)
+    
+    plt.tight_layout()
+
+    if salvar:
+        salvar_visualizacao('scatterplots')
+
+    if plot:
+        plt.show()
+
+def correlacao(df, method='pearson', plot=False, salvar=True):
+    """
+    Gera heatmaps de correlação.
+
+    df: DataFrame de interesse.
+    method: Método de cálculo de correlação (default 'pearson'. Outras opções: 'kendall', 'spearman')
+    plot: Seleciona se será gerada uma pré visualiação (default False)
+    salvar: Seleciona se a figura será salva (default True)
+    """
+
+    matriz = df[variaveis].corr(method=method)
+
+    plt.figure(figsize=(20,20))
+
+    sns.heatmap(data=matriz, 
+                annot=True, 
+                cmap='coolwarm', 
+                fmt=".2f", 
+                linewidths=0.5,
+                )
+
+    plt.title('Correlação de ' + str(method).title())
+    plt.tight_layout()
+
+    if salvar:
+        salvar_visualizacao('Correlação de ', method)
 
     if plot:
         plt.show()
 
 # Todas as visualizações
 
-def visualizacoes_todas(df):    # Gera todas as visualizações, exceto os boxplots de estatísticas
-    visualizacoes_missingno(df)
-    faltantes_ano(df)
-    faltantes_mes(df)
-    boxplot_tudo(df)
+def visualizacoes_todas(df, plot=False, salvar=True):    # Gera todas as visualizações, exceto os boxplots de estatísticas
+    visualizacoes_missingno(df, plot=plot, salvar=salvar)
+    faltantes_ano(df, plot=plot, salvar=salvar)
+    faltantes_mes(df, plot=plot, salvar=salvar)
+    boxplot_tudo(df, plot=plot, salvar=salvar)
+    scatter_tudo(df, plot=plot, salvar=salvar)
+    correlacao(df, plot=plot, salvar=salvar)

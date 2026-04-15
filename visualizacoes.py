@@ -342,13 +342,15 @@ def correlacao(df, method='pearson', plot=False, salvar=True):
                 cmap='coolwarm', 
                 fmt=".2f", 
                 linewidths=0.5,
+                vmin=-1,
+                vmax=1
                 )
 
     plt.title('Correlação de ' + str(method).title())
     plt.tight_layout()
 
     if salvar:
-        salvar_visualizacao('Correlação de ', method)
+        salvar_visualizacao('correlacao_de', method)
 
     if plot:
         plt.show()

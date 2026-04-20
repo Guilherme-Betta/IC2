@@ -106,7 +106,7 @@ def casas_decimais(coluna):
     # Retorna o valor máximo de dígitos após a casa decimal como integer
     return int(n_decimais.max())
 
-def formatar_variaveis(describe, df, variaveis):
+def formatar_variaveis(describe, n_casas_decimais):
     """
     Formata o DataFrame describe com casas decimais baseadas nos dados originais.
     describe: DataFrame de estatísticas.
@@ -121,17 +121,14 @@ def formatar_variaveis(describe, df, variaveis):
     estatisticas_para_formatar = ['mean', 'std', 'min', '25%', '50%', '75%', 'max']
 
     # Loop para iterar sobre as variaveis numericas
-    for col in variaveis:
-        
-        # 1. A função analisa UMA coluna do banco ORIGINAL por vez
-        casas = casas_decimais(df[col])
+    for i in n_casas_decimais:
 
-        # 2. Criacao da regra de formatacao com base na analise do passo anterior (ex: se casas=2, vira "{:.2f}")
-        regra_formatacao = f"{{:.{casas}f}}"
+        # Regra de formatacao com base nos dados armazenados em n_casas_decimais (ex: se casas=2, vira "{:.2f}")
+        regra_formatacao = f"{{:.{n_casas_decimais[i]}f}}"
 
-        # 3. Aplicacao da formatacao nas estatísticas selecionadas no primeiro passo
-        dados_matematicos = describe.loc[estatisticas_para_formatar, col]
-        describe.loc[estatisticas_para_formatar, col] = dados_matematicos.apply(
+        # Aplicacao da formatacao nas estatísticas selecionadas no primeiro passo
+        dados_matematicos = describe.loc[estatisticas_para_formatar, i]
+        describe.loc[estatisticas_para_formatar, i] = dados_matematicos.apply(
             lambda x: regra_formatacao.format(float(x)) if pd.notna(x) else x
         )
     return describe
@@ -156,7 +153,12 @@ def formatar_metadados(describe, metadados):
     # Retorna o quadro de estatísticas
     return describe
 
-def analise_descritiva(df, metadados, variaveis, salvar_arquivo=True, transpose=True):
+def analise_descritiva(df, 
+                       metadados = None, 
+                       variaveis = None, 
+                       n_casas_decimais = None, 
+                       salvar_arquivo=True, 
+                       transpose=True):
     """
     Executa todas as etapas da análise descritiva
     df: DataFrame cujas estatísticas estão sendo descritas
@@ -164,10 +166,18 @@ def analise_descritiva(df, metadados, variaveis, salvar_arquivo=True, transpose=
     variaveis: Lista de colunas com variaveis numéricas
     salvar_arquivo: Determina se o quadro será salvo (Ativado by default)
     """
+
+    if metadados is None or variaveis is None:
+        from utils import separar_colunas
+        metadados, variaveis = separar_colunas(df)
+
+    if n_casas_decimais is None:
+        n_casas_decimais = n_casas_decimais
+
     describe = estatisticas_descritivas(df)
     calculate_missing_percentage(df, describe)
     corrupted_data(df, describe, variaveis)
-    formatar_variaveis(describe, df, variaveis)
+    formatar_variaveis(describe, n_casas_decimais)
     describe = formatar_metadados(describe, metadados)
     if transpose:
         describe = describe.T

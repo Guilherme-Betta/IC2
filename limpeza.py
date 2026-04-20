@@ -2,7 +2,7 @@ import pandas as pd
 from utils import *
 from analise_descritiva import casas_decimais
 
-def prep_brutos(df):
+def prep_brutos(df, salvar_arquivo=True):
     """
     Prepara dados brutos: extrai data normalizada, reseta index, e renomeia.
     df: DataFrame de dados brutos a serem preparado (deve ter coluna 'Data', com dtype datetime)
@@ -23,17 +23,11 @@ def prep_brutos(df):
     df.rename(columns={'index': 'Index'}, inplace=True)
 
     metadados, variaveis = separar_colunas(df)
-    
-    # Armazena o número de casas decimais utilizadas por variável na base de dados. 
-    # É útil implementar esse método enquanto a base ainda está alterada, portanto,
-    # Ela está sendo colocada nessa função dedicada aos dados brutos.
 
-    n_casas_decimais = {}
-
-    for i in variaveis:
-        n_casas_decimais[i] = casas_decimais(df[i])
-
-    return df, metadados, variaveis, n_casas_decimais
+    if salvar_arquivo:
+        salvar(df, "dados_prontos")
+        
+    return df, metadados, variaveis
 
 def limpeza(df, metadados, variaveis, threshold_missing=0.3, salvar_arquivo=True):
     """

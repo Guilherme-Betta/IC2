@@ -21,7 +21,7 @@ def separar_colunas(df):
     return metadados, variaveis
 
 # Leitura de arquivos
-def dados(caminho_arquivo):
+def dados(caminho_arquivo, original=False):
     """
     Carrega dados de arquivos Excel, e separa os metadados das variáveis.
 
@@ -35,10 +35,25 @@ def dados(caminho_arquivo):
         df = pd.read_excel(full_path)
     # Retorna uma mensagem caso o arquivo não seja encontrado
     except FileNotFoundError:
-        raise FileNotFoundError(f"Arquivo não encontrado: {full_path}")
+        raise FileNotFoundError(f"Arquivo não encontrado: {caminho_arquivo}")
     
     # Separa os metadados presentes no dataframe das variaveis
     metadados, variaveis = separar_colunas(df)
+
+    # Armazena o número de casas decimais utilizadas por variável na base de dados. 
+    # É útil implementar esse método enquanto a base ainda está alterada, portanto,
+    # Ela está sendo colocada nessa função dedicada aos dados brutos.
+
+    if original:
+        from format import casas_decimais, set_casas_decimais_padrao, _casas_decimais_padrao
+        n_casas_decimais = {}
+
+        for i in variaveis:
+            n_casas_decimais[i] = casas_decimais(df[i])
+
+        set_casas_decimais_padrao(n_casas_decimais)
+
+        return df, metadados, variaveis, n_casas_decimais
     
     return df, metadados, variaveis
 

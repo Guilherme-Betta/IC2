@@ -19,4 +19,4 @@ zscore_media = dados(r"data\out\5) Imputação\Z-Score\Média\imput_mean20260420
 zscore_mediana = dados(r"data\out\5) Imputação\Z-Score\Mediana\imput_median20260420_163302.xlsx")
 
 dados_limpos.plot(
-    kind='bar')
+    kind='bar') 

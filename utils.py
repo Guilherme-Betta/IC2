@@ -1,33 +1,39 @@
+# %%
 import os
 import pandas as pd
-from datetime import datetime
 from pathlib import Path
+from datetime import datetime
 
-# Para utilizar caminhos relativos nos jupyter notebooks
-BASE_DIR = Path(__file__).resolve().parent
+# %%
+# Lista fixa com metadados que podem estar presentes nas bases de dados
 
-# Constantes
 METADADOS = ['Data', 'data_normalizada', 'Estatistica', 'Index']
 
-# Separação de metadados de variáveis
+# %%
+# Variável que permite utilizar caminhos relativos nos jupyter notebooks
+
+BASE_DIR = Path(__file__).resolve().parent
+
+# %%
 def separar_colunas(df):
     """
     Separa colunas de metadados de colunas de variaveis.
 
-    Retorna: (metadados, variaveis)
+    Retorna: metadados, variaveis
     """
     metadados = [col for col in METADADOS if col in df.columns]
     variaveis = [col for col in df.columns if col not in metadados]
     return metadados, variaveis
 
-# Leitura de arquivos
+# %%
 def dados(caminho_arquivo, original=False):
     """
     Carrega dados de arquivos Excel, e separa os metadados das variáveis.
 
     caminho_arquivo: Caminho relativo do arquivo no workspace.
+    original: Seleciona se a base de dados deve ser tratada como a original (default: False)
 
-    Retorna: (df, metadados, variaveis)
+    Retorna: df, metadados, variaveis (, n_casas_decimais, se original=True)
     """
     full_path = BASE_DIR / caminho_arquivo
     # Verifica a existência do arquivo desejado
@@ -45,25 +51,27 @@ def dados(caminho_arquivo, original=False):
     # Ela está sendo colocada nessa função dedicada aos dados brutos.
 
     if original:
-        from format import casas_decimais, set_casas_decimais_padrao, _casas_decimais_padrao
+        from format import casas_decimais
         n_casas_decimais = {}
 
         for i in variaveis:
             n_casas_decimais[i] = casas_decimais(df[i])
 
-        set_casas_decimais_padrao(n_casas_decimais)
+        from format import casas_decimais_padrao
+        casas_decimais_padrao(n_casas_decimais)
 
         return df, metadados, variaveis, n_casas_decimais
     
     return df, metadados, variaveis
 
-# Salvamento de arquivos
+# %%
 def salvar(arquivo, nome_arquivo, index=False):
     """
     Salva o arquivo em data/out (no workspace), com timestamp.
 
-    arquivo: Seleciona o arquivo que deve ser salvo.
+    arquivo: Nome do arquivo que deve ser salvo.
     nome_arquivo: Nomeia o arquivo.
+    index: Seleciona se um novo index deve ser criado (default: False)
     """
 
     # Cria uma variável para guardar o caminho de onde o arquivo resultante será salvo
@@ -81,11 +89,16 @@ def salvar(arquivo, nome_arquivo, index=False):
     # Gera o arquivo de saida
     arquivo.to_excel(caminho_saida, engine='openpyxl', index=index)
 
-    # Gera uma mensagem para o usuario informando sobre onde o arquivo foi salvo
-    print(f"Arquivo salvo em: {caminho_saida}")
-
-# Salvemento de figuras
+# %%
 def salvar_visualizacao(fig, nome_arquivo, formato="png", dpi=300):
+    """
+    Salva a figura em data/out (no workspace), com timestamp.
+
+    fig: Nome da figura a ser salva.
+    nome_arquivo: Nomeia o arquivo da figura.
+    formato: Formato de arquivo da figura (default: png).
+    dpi: Resolução da imagem em "dots per inch" (default: 300).
+    """
     pasta_saida = BASE_DIR / "data" / "out"
     pasta_saida.mkdir(parents=True, exist_ok=True)
 
@@ -96,47 +109,4 @@ def salvar_visualizacao(fig, nome_arquivo, formato="png", dpi=300):
     print(f"Visualização salva em: {caminho_saida}")
     return caminho_saida
 
-
-# Pivot de dataframes
-def pivot(df, metadados, variaveis):
-    """
-    Pivot do dataframe, criando 3 colunas para cada variável, uma para cada estatística, 
-    assim eliminando a coluna "Estatistica" do dataframe.
-
-    df: Seleciona o DataFrame a ser pivotado.
-    metadados: Pode manter como "metadados".
-    variaveis: Pode manter como "variaveis".
-    """
-    # Cria listas locais para separar metadados e variaveis do dataframe
-    metadados = [col for col in METADADOS if col in df.columns]
-    variaveis = [col for col in df.columns if col not in metadados]
-    
-    # Separa a coluna de Estatisticas para o pivot
-    index_cols = [col for col in metadados if col != 'Estatistica']
-    
-    # Ordena as estatísticas em ordem crescente
-    df['Estatistica'] = pd.Categorical(
-        df['Estatistica'], 
-        categories=['Min.', 'Med.', 'Max.'], 
-        ordered=True
-    )
-
-    # Executa o pivot
-    df_pivot = df.pivot(index=index_cols, 
-                        columns='Estatistica',
-                        values=variaveis)
-    
-    # Renomeia as colunas das variáveis, implementando qual estatistica cada coluna representa
-    df_pivot.columns = [f"{var}_{est}" for var, est in df_pivot.columns]
-    
-    # Retorna o dataframe
-    return df_pivot.reset_index()
-
-#Unpivot de dataframes
-def unpivot(df):
-    """
-    Unpivot de dataframe.
-    """
-    # A fazer
-    pass
 

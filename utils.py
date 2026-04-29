@@ -16,10 +16,20 @@ BASE_DIR = Path(__file__).resolve().parent
 
 # %%
 def separar_colunas(df):
-    """
-    Separa colunas de metadados de colunas de variaveis.
+    """Separa colunas em listas de metadados e variáveis presentes no df.
 
-    Retorna: metadados, variaveis
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame de interesse.
+
+    Returns
+    -------
+    metadados : list
+        Lista de metadados presentes em df.
+
+    variaveis : list
+        Lista de variáveis presentes em df.
     """
     metadados = [col for col in METADADOS if col in df.columns]
     variaveis = [col for col in df.columns if col not in metadados]
@@ -28,12 +38,35 @@ def separar_colunas(df):
 # %%
 def dados(caminho_arquivo, original=False):
     """
-    Carrega dados de arquivos Excel, e separa os metadados das variáveis.
+    Carrega um arquivo, separa as suas colunas em metadados e 
+    variáveis. Se o arquivo for designado como original, armazena
+    o número de casas decimais utilizadas em cada variável no dicionário
+    n_casas_decimais.
 
-    caminho_arquivo: Caminho relativo do arquivo no workspace.
-    original: Seleciona se a base de dados deve ser tratada como a original (default: False)
+    Parameters
+    ----------
+    caminho_arquivo : str
+        Caminho relativo para o diretório do arquivo.
+    original : bool, default False
+        Define se o arquivo deve ser tratado como a base de dados original.
 
-    Retorna: df, metadados, variaveis (, n_casas_decimais, se original=True)
+    Returns
+    -------
+        df : pd.DataFrame
+            DataFrame a ser carregado.
+        metadados : list
+            Lista com os nomes das colunas identificadas como metadados de df.
+        variaveis : lists
+            Lista com nomes das colunas identificadas como variáveis de df
+        n_casas_decimais : dict
+            Dicionário com o número de casas decimais utilizadas por variável na base de dados original, 
+            caso original=True. Caso contrário, não é retornado.
+        
+
+    Raises
+    ------
+    FileNotFoundError
+        Caso o arquivo não seja localizado no diretório selecionado em "caminho_arquivo"
     """
     full_path = BASE_DIR / caminho_arquivo
     # Verifica a existência do arquivo desejado
@@ -67,15 +100,20 @@ def dados(caminho_arquivo, original=False):
 # %%
 def salvar(arquivo, nome_arquivo, index=False):
     """
-    Salva o arquivo em data/out (no workspace), com timestamp.
+    Salva um arquivo em data/output (no workspace) com timestamp em seu nome.
 
-    arquivo: Nome do arquivo que deve ser salvo.
-    nome_arquivo: Nomeia o arquivo.
-    index: Seleciona se um novo index deve ser criado (default: False)
+    Parameters
+    ----------
+    arquivo : str
+        Nome da variável com o conteúdo a ser salvo.
+    nome_arquivo : str
+        Nome a ser dado ao arquivo no salvamento.
+    index : bool, default False
+        Define se uma coluna de índice deve ser adicionada para enumerar as linhas do arquivo.
     """
 
     # Cria uma variável para guardar o caminho de onde o arquivo resultante será salvo
-    pasta_saida = BASE_DIR / "data" / "out"
+    pasta_saida = BASE_DIR / "data" / "output"
 
     # Cria um diretorio para salvar o arquivo caso ele ainda nao exista  
     pasta_saida.mkdir(parents=True, exist_ok=True)  
@@ -92,14 +130,25 @@ def salvar(arquivo, nome_arquivo, index=False):
 # %%
 def salvar_visualizacao(fig, nome_arquivo, formato="png", dpi=300):
     """
-    Salva a figura em data/out (no workspace), com timestamp.
+    Salva figuras em data/output (no workspace), com timestamp em seu nome.
 
-    fig: Nome da figura a ser salva.
-    nome_arquivo: Nomeia o arquivo da figura.
-    formato: Formato de arquivo da figura (default: png).
-    dpi: Resolução da imagem em "dots per inch" (default: 300).
+    Parameters
+    ----------
+    fig : str
+        Nome da variável contendo a figura a ser salva.
+    nome_arquivo : str
+        Nome do arquivo em que a figura será salva.
+    formato : str, default "png"
+        Define o formato em que a figura deve ser salva.
+    dpi : float or 'figure', default: 300
+        Resolução em dots per inch. Consultar documentação "matplotlib.pyplot.savefig"
+
+    Returns
+    -------
+        caminho_saida : str
+            Caminho do diretório em que o arquivo foi salvo
     """
-    pasta_saida = BASE_DIR / "data" / "out"
+    pasta_saida = BASE_DIR / "data" / "output"
     pasta_saida.mkdir(parents=True, exist_ok=True)
 
     nome_arquivo = f"{nome_arquivo}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.{formato}"
@@ -108,5 +157,43 @@ def salvar_visualizacao(fig, nome_arquivo, formato="png", dpi=300):
     fig.savefig(caminho_saida, dpi=dpi, bbox_inches="tight")
     print(f"Visualização salva em: {caminho_saida}")
     return caminho_saida
+
+# %%
+def pivot(df, metadados, variaveis):
+    """
+    Pivot do dataframe, criando 3 colunas para cada variável, uma para cada estatística, 
+    assim eliminando a coluna "Estatistica" do dataframe
+    """
+    # Cria listas locais para separar metadados e variaveis do dataframe
+    metadados = [col for col in METADADOS if col in df.columns]
+    variaveis = [col for col in df.columns if col not in metadados]
+    
+    # Separa a coluna de Estatisticas para o pivot
+    index_cols = [col for col in metadados if col != 'Estatistica']
+    
+    # Ordena as estatísticas em ordem crescente
+    df['Estatistica'] = pd.Categorical(
+        df['Estatistica'], 
+        categories=['Min.', 'Med.', 'Max.'], 
+        ordered=True
+    )
+
+    # Executa o pivot
+    df_pivot = df.pivot(index=index_cols, 
+                        columns='Estatistica',
+                        values=variaveis)
+    
+    # Renomeia as colunas das variáveis, implementando qual estatistica cada coluna representa
+    df_pivot.columns = [f"{var}_{est}" for var, est in df_pivot.columns]
+    
+    # Retorna o dataframe
+    return df_pivot.reset_index()
+
+# %%
+def unpivot(df):
+    """
+    Unpivot de dataframe.
+    """
+    # A fazer
 
 

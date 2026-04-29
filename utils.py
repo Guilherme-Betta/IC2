@@ -38,10 +38,11 @@ def separar_colunas(df):
 # %%
 def dados(caminho_arquivo, original=False):
     """
-    Carrega um arquivo, separa as suas colunas em metadados e 
-    variáveis. Se o arquivo for designado como original, armazena
-    o número de casas decimais utilizadas em cada variável no dicionário
-    n_casas_decimais.
+    Carrega um arquivo, utiliza "." como separador decimal, 
+    separa as suas colunas em metadados e variáveis. 
+    Se o arquivo for designado como original, armazena
+    o número de casas decimais utilizadas em cada variável 
+    no dicionário n_casas_decimais.
 
     Parameters
     ----------
@@ -71,7 +72,7 @@ def dados(caminho_arquivo, original=False):
     full_path = BASE_DIR / caminho_arquivo
     # Verifica a existência do arquivo desejado
     try:
-        df = pd.read_excel(full_path)
+        df = pd.read_excel(full_path, decimal=".")
     # Retorna uma mensagem caso o arquivo não seja encontrado
     except FileNotFoundError:
         raise FileNotFoundError(f"Arquivo não encontrado: {caminho_arquivo}")

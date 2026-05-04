@@ -1,7 +1,7 @@
 from utils import *
 from analise_descritiva import *
 from imputacao import *
-from limpeza import *
+from processamento import *
 from outliers import *
 from visualizacoes import *
 

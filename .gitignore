@@ -13,8 +13,6 @@ Reuniões/
 
 # Opcional: ignorar tipos de arquivo específicos que podem ser gerados
 # como planilhas de resultados, logs, etc.
-*.xlsx
-*.csv
 *.log
 
 # Ignorar atalhos do Google Drive

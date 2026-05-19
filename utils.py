@@ -38,41 +38,42 @@ def separar_colunas(df):
 # %%
 def dados(caminho_arquivo, original=False):
     """
-    Carrega um arquivo, utiliza "." como separador decimal, 
-    separa as suas colunas em metadados e variáveis. 
-    Se o arquivo for designado como original, armazena
-    o número de casas decimais utilizadas em cada variável 
-    no dicionário n_casas_decimais.
+    Carrega um arquivo, separa as suas colunas em metadados e 
+    variáveis. 
+    
+    Se o arquivo for designado como original, a função calcula e armazena
+    o número de casas decimais utilizadas em cada variável no dicionário
+    n_casas_decimais.
 
     Parameters
     ----------
-    caminho_arquivo : str
+    caminho_arquivo : str or Path
         Caminho relativo para o diretório do arquivo.
     original : bool, default False
         Define se o arquivo deve ser tratado como a base de dados original.
+        Se True, gera o dicionário de casas decimais.
 
     Returns
     -------
         df : pd.DataFrame
-            DataFrame a ser carregado.
+            DataFrame a ser carregado a partir do arquivo Excel.
         metadados : list
             Lista com os nomes das colunas identificadas como metadados de df.
         variaveis : lists
-            Lista com nomes das colunas identificadas como variáveis de df
+            Lista com nomes das colunas identificadas como variáveis de df.
         n_casas_decimais : dict
             Dicionário com o número de casas decimais utilizadas por variável na base de dados original, 
             caso original=True. Caso contrário, não é retornado.
-        
 
     Raises
     ------
     FileNotFoundError
-        Caso o arquivo não seja localizado no diretório selecionado em "caminho_arquivo"
+        Caso o arquivo não seja localizado no diretório selecionado em "caminho_arquivo".
     """
     full_path = BASE_DIR / caminho_arquivo
     # Verifica a existência do arquivo desejado
     try:
-        df = pd.read_excel(full_path, decimal=".")
+        df = pd.read_excel(full_path)
     # Retorna uma mensagem caso o arquivo não seja encontrado
     except FileNotFoundError:
         raise FileNotFoundError(f"Arquivo não encontrado: {caminho_arquivo}")
@@ -101,7 +102,7 @@ def dados(caminho_arquivo, original=False):
 # %%
 def salvar(arquivo, nome_arquivo, index=False):
     """
-    Salva um arquivo em data/output (no workspace) com timestamp em seu nome.
+    Salva um arquivo em data/out (no workspace) com timestamp em seu nome.
 
     Parameters
     ----------
@@ -114,7 +115,7 @@ def salvar(arquivo, nome_arquivo, index=False):
     """
 
     # Cria uma variável para guardar o caminho de onde o arquivo resultante será salvo
-    pasta_saida = BASE_DIR / "data" / "output"
+    pasta_saida = BASE_DIR / "data" / "out"
 
     # Cria um diretorio para salvar o arquivo caso ele ainda nao exista  
     pasta_saida.mkdir(parents=True, exist_ok=True)  
@@ -131,7 +132,7 @@ def salvar(arquivo, nome_arquivo, index=False):
 # %%
 def salvar_visualizacao(fig, nome_arquivo, formato="png", dpi=300):
     """
-    Salva figuras em data/output (no workspace), com timestamp em seu nome.
+    Salva figuras em data/out (no workspace), com timestamp em seu nome.
 
     Parameters
     ----------
@@ -142,14 +143,14 @@ def salvar_visualizacao(fig, nome_arquivo, formato="png", dpi=300):
     formato : str, default "png"
         Define o formato em que a figura deve ser salva.
     dpi : float or 'figure', default: 300
-        Resolução em dots per inch. Consultar documentação "matplotlib.pyplot.savefig"
+        Resolução em dots per inch. Consultar documentação "matplotlib.pyplot.savefig".
 
     Returns
     -------
         caminho_saida : str
             Caminho do diretório em que o arquivo foi salvo
     """
-    pasta_saida = BASE_DIR / "data" / "output"
+    pasta_saida = BASE_DIR / "data" / "out"
     pasta_saida.mkdir(parents=True, exist_ok=True)
 
     nome_arquivo = f"{nome_arquivo}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.{formato}"
@@ -163,8 +164,22 @@ def salvar_visualizacao(fig, nome_arquivo, formato="png", dpi=300):
 def pivot(df, metadados, variaveis):
     """
     Pivot do dataframe, criando 3 colunas para cada variável, uma para cada estatística, 
-    assim eliminando a coluna "Estatistica" do dataframe
-    """
+    assim eliminando a coluna "Estatistica" do dataframe.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame Wide Format a ser pivotado.
+    metadados : list
+        Lista de metadados presentes em df.
+    variaveis : list
+        Lista de variáveis presentes em df.
+
+    Returns
+    -------
+    df_pivot.reset_index() : pd.DataFrame
+        DataFrame pivotado para Long Format.
+    """    
     # Cria listas locais para separar metadados e variaveis do dataframe
     metadados = [col for col in METADADOS if col in df.columns]
     variaveis = [col for col in df.columns if col not in metadados]
@@ -196,5 +211,32 @@ def unpivot(df):
     Unpivot de dataframe.
     """
     # A fazer
+
+# %%
+def remover_nan(df, salvar_arquivo=False, nome_saida=None):
+    """
+    Remove linhas com NaN do DataFrame
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame de interesse, contendo NaN.
+    salvar_arquivo, default False
+        Se True, salva um Excel contendo o DataFrame sem NaN.
+    nome_saida : str, optional
+        Nome para o arquivo salvo.
+        Exemplo: nome_saida="dados" --> "dados_no_nan"
+
+    Returns
+    -------
+    df : pd.DataFrame
+        DataFrame, pós remoção de linhas com NaN.
+    """    
+    df = df.dropna().copy()
+
+    if salvar_arquivo:
+        salvar(df, f"{nome_saida}_no_nan")
+
+    return df
 
 

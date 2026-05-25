@@ -11,7 +11,7 @@ sys.path.append(str(Path.cwd().parent))
 from utils import dados, pivot, salvar
 
 # %%
-def filtro_colunas(df, variaveis, min_missing, max_missing):
+def filtro_colunas(df, min_missing, max_missing):
     """
     Seleciona colunas com dados faltantes entre min_missing e max_missing.
 
@@ -19,8 +19,6 @@ def filtro_colunas(df, variaveis, min_missing, max_missing):
     ----------
     df : pd.DataFrame
         DataFrame de interesse.
-    variaveis : list
-        Lista de variáveis presentes em df.
     min_missing : float
         Determina a fração mínima de dados faltantes tolerados numa coluna.
     max_missing : float
@@ -31,6 +29,9 @@ def filtro_colunas(df, variaveis, min_missing, max_missing):
     colunas_filtradas : list
         Lista com os nomes das colunas com dados faltantes entre min_missing e max_missing.
     """    
+    from utils import separar_colunas
+    metadados, variaveis = separar_colunas(df)
+
     # Calcula a porcentagem de dados faltantes para cada coluna
     fracao_faltantes = df[variaveis].isna().mean()
 
@@ -40,7 +41,7 @@ def filtro_colunas(df, variaveis, min_missing, max_missing):
 # %%
 # Teste: filtra colunas com dados faltantes entre 5% e 15% (para KNN)
 df, metadados, variaveis = dados(r"data\input\dados_brutos.xlsx")
-filtro_colunas(df, variaveis=variaveis, min_missing=0.05, max_missing=0.15)
+filtro_colunas(df, min_missing=0.05, max_missing=0.15)
 
 # %% [markdown]
 # # Média
@@ -49,8 +50,8 @@ filtro_colunas(df, variaveis=variaveis, min_missing=0.05, max_missing=0.15)
 # Imputação para colunas com <5% de dados faltantes
 
 # %%
-def mean_imput(df, metadados, variaveis, max_missing=0.05, 
-               return_reduced=False, save_missing_pct=False, salvar_arquivo=False):
+def mean_imput(df, max_missing=0.05, return_reduced=False, 
+                save_missing_pct=False, salvar_arquivo=False):
     """
     Faz a imputação dos dados faltantes via média.
 
@@ -58,10 +59,6 @@ def mean_imput(df, metadados, variaveis, max_missing=0.05,
     ----------
     df : pd.DataFrame
         DataFrame de interesse.
-    metadados : list
-        Lista de metadados presentes em df.
-    variaveis : list
-        Lista de variáveis presentes em df.
     max_missing : float, default 0.05
         Determina a fração máxima de dados faltantes tolerados numa coluna.
         Se a fração de dados faltantes for maior que max_missing, o algoritmo de 
@@ -82,7 +79,11 @@ def mean_imput(df, metadados, variaveis, max_missing=0.05,
         Dicionário com as porcentagens de dados faltantes (apenas se save_missing_pct=True).
     """
     df = df.copy()
-    cols = filtro_colunas(df, variaveis, min_missing=0, max_missing=max_missing)
+
+    from utils import separar_colunas
+    metadados, variaveis = separar_colunas(df)
+
+    cols = filtro_colunas(df, min_missing=0, max_missing=max_missing)
     
     # Calcula porcentagem de dados faltantes antes de imputar
     if save_missing_pct:
@@ -112,7 +113,7 @@ def mean_imput(df, metadados, variaveis, max_missing=0.05,
 # Teste
 dados_limpos, metadados, variaveis = dados(r"data\input\dados_limpos.xlsx")
 
-mean_imput(dados_limpos, metadados=metadados, variaveis=variaveis, return_reduced=True)
+mean_imput(dados_limpos, return_reduced=True)
 
 # %% [markdown]
 # # Mediana
@@ -130,10 +131,6 @@ def median_imput(df, metadados, variaveis, max_missing=0.05,
     ----------
     df : pd.DataFrame
         DataFrame de interesse.
-    variaveis : list
-        Lista de variáveis presentes em df.
-    metadados : list
-        Lista de metadados presentes em df.
     max_missing : float, default 0.05
         Determina a fração máxima de dados faltantes tolerados numa coluna.
         Se a fração de dados faltantes for maior que max_missing, o algoritmo de 
@@ -154,7 +151,11 @@ def median_imput(df, metadados, variaveis, max_missing=0.05,
         Dicionário com as porcentagens de dados faltantes (apenas se save_missing_pct=True).
     """
     df = df.copy()
-    cols = filtro_colunas(df, variaveis, min_missing=0, max_missing=max_missing)
+
+    from utils import separar_colunas
+    metadados, variaveis = separar_colunas(df)
+
+    cols = filtro_colunas(df, min_missing=0, max_missing=max_missing)
     
     # Calcula porcentagem de dados faltantes antes de imputar
     if save_missing_pct:
@@ -184,7 +185,7 @@ def median_imput(df, metadados, variaveis, max_missing=0.05,
 # Teste
 dados_limpos, metadados, variaveis = dados(r"data\input\dados_limpos.xlsx")
 
-median_imput(dados_limpos, metadados=metadados, variaveis=variaveis, return_reduced=True)
+median_imput(dados_limpos, return_reduced=True)
 
 # %% [markdown]
 # # KNN
@@ -201,10 +202,6 @@ def knn_imput(df, metadados, variaveis, min_missing=0.05, max_missing=0.15,
     ----------
     df : pd.DataFrame
         DataFrame de interesse.
-    metadados : list
-        Lista de metadados presentes em df.
-    variaveis : list
-        Lista de variáveis presentes em df.
     min_missing : float, default 0.05
         Determina a fração mínima de dados faltantes tolerados numa coluna.
     max_missing : float, default 0.15
@@ -225,7 +222,11 @@ def knn_imput(df, metadados, variaveis, min_missing=0.05, max_missing=0.15,
         Dicionário com as porcentagens de dados faltantes (apenas se save_missing_pct=True).
     """
     df = df.copy()
-    cols = filtro_colunas(df, variaveis, min_missing=min_missing, max_missing=max_missing)
+
+    from utils import separar_colunas
+    metadados, variaveis = separar_colunas(df)
+
+    cols = filtro_colunas(df, min_missing=min_missing, max_missing=max_missing)
 
     # Calcula porcentagem de dados faltantes antes de imputar
     if save_missing_pct:
@@ -263,7 +264,7 @@ def knn_imput(df, metadados, variaveis, min_missing=0.05, max_missing=0.15,
 # Teste
 dados_limpos, metadados, variaveis = dados(r"data\input\dados_limpos.xlsx")
 
-knn_imput(dados_limpos, metadados=metadados, variaveis=variaveis, return_reduced=True)
+knn_imput(dados_limpos, return_reduced=True)
 
 # %% [markdown]
 # # KNN - Escalonamento

@@ -39,9 +39,9 @@ def filtro_colunas(df, min_missing, max_missing):
     return fracao_faltantes[(fracao_faltantes >= min_missing) & (fracao_faltantes <= max_missing)].index.tolist()
 
 # %%
-# Teste: filtra colunas com dados faltantes entre 5% e 15% (para KNN)
-df, metadados, variaveis = dados(r"data\input\dados_brutos.xlsx")
-filtro_colunas(df, min_missing=0.05, max_missing=0.15)
+# # Teste: filtra colunas com dados faltantes entre 5% e 15% (para KNN)
+# df, metadados, variaveis = dados(r"data\input\dados_brutos.xlsx")
+# filtro_colunas(df, min_missing=0.05, max_missing=0.15)
 
 # %% [markdown]
 # # Média
@@ -50,8 +50,8 @@ filtro_colunas(df, min_missing=0.05, max_missing=0.15)
 # Imputação para colunas com <5% de dados faltantes
 
 # %%
-def mean_imput(df, max_missing=0.05, return_reduced=False, 
-                save_missing_pct=False, salvar_arquivo=False):
+def mean_imput(df, max_missing=0.05, 
+               return_reduced=False, save_missing_pct=False, salvar_arquivo=False):
     """
     Faz a imputação dos dados faltantes via média.
 
@@ -110,10 +110,10 @@ def mean_imput(df, max_missing=0.05, return_reduced=False,
     return df
 
 # %%
-# Teste
-dados_limpos, metadados, variaveis = dados(r"data\input\dados_limpos.xlsx")
+# # Teste
+# dados_limpos, metadados, variaveis = dados(r"data\input\dados_limpos.xlsx")
 
-mean_imput(dados_limpos, return_reduced=True)
+# mean_imput(dados_limpos, return_reduced=True)
 
 # %% [markdown]
 # # Mediana
@@ -122,7 +122,7 @@ mean_imput(dados_limpos, return_reduced=True)
 # Imputação para colunas com <5% de dados faltantes
 
 # %%
-def median_imput(df, metadados, variaveis, max_missing=0.05, 
+def median_imput(df, max_missing=0.05, 
                  return_reduced=False, save_missing_pct=False, salvar_arquivo=False):
     """
     Faz a imputação dos dados faltantes via mediana.
@@ -182,10 +182,10 @@ def median_imput(df, metadados, variaveis, max_missing=0.05,
     return df
 
 # %%
-# Teste
-dados_limpos, metadados, variaveis = dados(r"data\input\dados_limpos.xlsx")
+# # Teste
+# dados_limpos, metadados, variaveis = dados(r"data\input\dados_limpos.xlsx")
 
-median_imput(dados_limpos, return_reduced=True)
+# median_imput(dados_limpos, return_reduced=True)
 
 # %% [markdown]
 # # KNN
@@ -193,7 +193,7 @@ median_imput(dados_limpos, return_reduced=True)
 # 5 - 15% de dados faltantes
 
 # %%
-def knn_imput(df, metadados, variaveis, min_missing=0.05, max_missing=0.15, 
+def knn_imput(df, min_missing=0.05, max_missing=0.15, 
               return_reduced=False, save_missing_pct=False, salvar_arquivo=False):
     """
     Faz a imputação dos dados faltantes via KNN (método do sklearn).
@@ -261,10 +261,10 @@ def knn_imput(df, metadados, variaveis, min_missing=0.05, max_missing=0.15,
     return df
 
 # %%
-# Teste
-dados_limpos, metadados, variaveis = dados(r"data\input\dados_limpos.xlsx")
+# # Teste
+# dados_limpos, metadados, variaveis = dados(r"data\input\dados_limpos.xlsx")
 
-knn_imput(dados_limpos, return_reduced=True)
+# knn_imput(dados_limpos, return_reduced=True)
 
 # %% [markdown]
 # # KNN - Escalonamento

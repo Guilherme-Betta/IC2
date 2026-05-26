@@ -1,12 +1,42 @@
+# %%
 import pandas as pd
 import missingno as msno
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 import math
+
+
+import sys
+from pathlib import Path
+sys.path.append(str(Path.cwd().parent))
 from utils import *
 
+# %%
+# Função que auxilia no salvamento de figuras
+def salvar_plot(nome):
+    """
+    Salva a figura atual com o nome informado.
+
+    Parameters
+    ----------
+    nome : str
+        Nome base do arquivo de saída.
+
+    Returns
+    -------
+    None
+    """
+    salvar_visualizacao(plt.gcf(), nome)
+    plt.close()
+
+# %% [markdown]
+# # Boxplots
+
+# %%
 # Formatação dos boxplots
+
+## Guarda as cores para cada parte do boxplot num dicionário
 cores_customizadas = {      
     'boxes': 'Blue',
     'medians': 'Red',
@@ -14,26 +44,32 @@ cores_customizadas = {
     'caps': 'Green'
 }
 
-estilo_outliers = dict(             
-    markerfacecolor='magenta',    
-    marker='o',                   
-    alpha=0.5                     
+estilo_outliers = dict(             # Determina a formatação dos pontos outliers
+    markerfacecolor = 'magenta',    # Determina a cor dos pontos      
+    marker = 'o',                   # Determina o formato dos pontos (no caso, círculos perfeitos)
+    alpha = 0.5                     # Determina a opacidade / transparência dos pontos
 )
 
-# Função que auxilia no salvamento de figuras
-def salvar_plot(nome):
-    salvar_visualizacao(plt.gcf(), nome)
-    plt.close()
-
-# boxplot_tudo
+# %%
 def boxplot_tudo(df, plot=False, salvar=True):
     """
     Gera boxplots para todas as variáveis numa única figura.
 
-    df: Seleciona o dataframe em que se deseja.
-    plot: Seleciona se será gerada uma pré visualiação (default False)
-    salvar: Seleciona se a figura será salva (default True)
-    """
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame de interesse.
+    plot : bool, default False
+        Determina se o código deve gerar visualizações
+        ao ser carregado.
+    salvar : bool, default True
+        Determina se o código deve salvar as visualizações
+        ao ser carregado.
+
+    Returns
+    -------
+    None
+    """    
     if 'Estatistica' in df.columns:
         df.boxplot(by='Estatistica',        # Agrupa os dados por Estatística
             layout=(5, 6),                  # Organiza os boxplots em linhas e colunas
@@ -60,11 +96,26 @@ def boxplot_tudo(df, plot=False, salvar=True):
     else:
         print('Esse dataframe não apresenta coluna \'Estatistica\'. Talvez você tenha usado um dataframe pivotado?')
 
-# boxplot_estatisticas
+# %%
 def boxplot_estatisticas(df, plot=False, salvar=True):
     """
-    Cria boxplots separados para cada estatística (Min, Med, MAx)
-    """
+    Cria boxplots separados para cada estatística (Min, Med, Max).
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame de interesse.
+    plot : bool, default False
+        Determina se o código deve gerar visualizações
+        ao ser carregado.
+    salvar : bool, default True
+        Determina se o código deve salvar as visualizações
+        ao ser carregado.
+    
+    Returns
+    -------
+    None
+    """    
 
     # Criando variaveis contendo cada tipo de estatistica (Min, Med, Max)
 
@@ -149,16 +200,31 @@ def boxplot_estatisticas(df, plot=False, salvar=True):
         if salvar:
             salvar_plot("boxplots_max")
 
-# visualizacoes_missingno
+# %% [markdown]
+# # Dados Faltantes
+
+# %%
 # Seção biblioteca missingno
 def visualizacoes_missingno(df, plot=False, salvar=True):
     """
-    Gera visualizações dos dados faltantes no DataFrame de interesse com os métodos da biblioteca missingno.
+    Gera visualizações dos dados faltantes no DataFrame
+    de interesse com os métodos da biblioteca missingno.
 
-    df: Seleciona o dataframe em que se deseja.
-    plot: Seleciona se será gerada uma pré visualiação (default False)
-    salvar: Seleciona se a figura será salva (default True)
-    """
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame de interesse.
+    plot : bool, default False
+        Determina se o código deve gerar visualizações
+        ao ser carregado.
+    salvar : bool, default True
+        Determina se o código deve salvar as visualizações
+        ao ser carregado.
+
+    Returns
+    -------
+    None
+    """    
     ## Gera uma matriz representando dados faltantes/coluna
     msno.matrix(df)
 
@@ -195,15 +261,27 @@ def visualizacoes_missingno(df, plot=False, salvar=True):
     if not plot:
         plt.close()   
 
+# %%
 # Taxa de faltantes / ano (0 → completo, 1 → tudo faltando)
 def faltantes_ano(df, plot=False, salvar=True):
    """
    Gera um heatmap de dados faltantes ao longo dos anos.
 
-   df: Seleciona o dataframe em que se deseja.
-   plot: Seleciona se será gerada uma pré visualiação (default False)
-   salvar: Seleciona se a figura será salva (default True)
-   """
+   Parameters
+   ----------
+   df : pd.DataFrame
+      DataFrame de interesse.
+   plot : bool, default False
+      Determina se o código deve gerar visualizações
+      ao ser carregado.
+   salvar : bool, default True
+      Determina se o código deve salvar as visualizações
+      ao ser carregado.
+
+   Returns
+   -------
+   None
+   """   
    # Separa colunas de data numa lista
    colunas_data = [coluna for coluna in df.columns if str(df[coluna].dtype).startswith('datetime')]
 
@@ -232,14 +310,28 @@ def faltantes_ano(df, plot=False, salvar=True):
    if plot:
       plt.show()
 
+# %%
 # Taxa de faltantes / mês
 
 def faltantes_mes(df, plot=False, salvar=True):
     """
     Gera um heatmap de dados faltantes em função dos meses.
 
-    df: DataFrame de interesse.
-    """
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame de interesse.
+    plot : bool, default False
+        Determina se o código deve gerar visualizações
+        ao ser carregado.
+    salvar : bool, default True
+        Determina se o código deve salvar as visualizações
+        ao ser carregado.
+
+    Returns
+    -------
+    None
+    """   
     # Separa colunas de data numa lista
     colunas_data = [coluna for coluna in df.columns if str(df[coluna].dtype).startswith('datetime')]
 
@@ -268,15 +360,29 @@ def faltantes_mes(df, plot=False, salvar=True):
     if plot:
         plt.show()
 
-# scatter_tudo
+# %% [markdown]
+# # Scatter Plots
+
+# %%
 def scatter_tudo(df, plot=False, salvar=True):
     """
     Gera scatterplots de todas as variáveis numa única figura.
 
-    df: Seleciona o dataframe em que se deseja.
-    plot: Seleciona se será gerada uma pré visualiação (default False)
-    salvar: Seleciona se a figura será salva (default True)
-    """
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame de interesse.
+    plot : bool, default False
+        Determina se o código deve gerar visualizações
+        ao ser carregado.
+    salvar : bool, default True
+        Determina se o código deve salvar as visualizações
+        ao ser carregado.
+    
+    Returns
+    -------
+    None
+    """    
 
     fig, axes = plt.subplots(nrows=math.ceil(len(variaveis) / 4), 
                             ncols=4,
@@ -323,15 +429,32 @@ def scatter_tudo(df, plot=False, salvar=True):
     if plot:
         plt.show()
 
+# %% [markdown]
+# # Correlação
+
+# %%
 def correlacao(df, method='pearson', plot=False, salvar=True):
     """
     Gera heatmaps de correlação.
 
-    df: DataFrame de interesse.
-    method: Método de cálculo de correlação (default 'pearson'. Outras opções: 'kendall', 'spearman')
-    plot: Seleciona se será gerada uma pré visualiação (default False)
-    salvar: Seleciona se a figura será salva (default True)
-    """
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame de interesse.
+    method : str, default 'pearson'
+        Método de cálculo de correlação. Opções:
+        'pearson', 'kendall', 'spearman'.
+    plot : bool, default False
+        Determina se o código deve gerar visualizações
+        ao ser carregado.
+    salvar : bool, default True
+        Determina se o código deve salvar as visualizações
+        ao ser carregado.
+
+    Returns
+    -------
+    None
+    """    
 
     matriz = df[variaveis].corr(method=method)
 
@@ -355,12 +478,37 @@ def correlacao(df, method='pearson', plot=False, salvar=True):
     if plot:
         plt.show()
 
-# Todas as visualizações
+# %% [markdown]
+# # Todas as Visualizações
 
-def visualizacoes_todas(df, plot=False, salvar=True):    # Gera todas as visualizações, exceto os boxplots de estatísticas
+# %%
+def visualizacoes_todas(df, plot=False, salvar=True):
+    """
+    Gera todas as visualizações, exceto os boxplots de estatísticas:
+    (biblioteca missingno, heatmap de dados faltantes por ano, 
+    heatmap de dados, faltantes por mês, boxplots de todas as variáveis,
+    scatterplots de todas as variáveis, heatmaps de correlação)
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame de interesse
+    plot : bool, default False
+        Determina se o código deve gerar visualizações
+        ao ser carregado.
+    salvar : bool, default True
+        Determina se o código deve salvar as visualizações
+        ao ser carregado.
+
+    Returns
+    -------
+    None
+    """        # 
     visualizacoes_missingno(df, plot=plot, salvar=salvar)
     faltantes_ano(df, plot=plot, salvar=salvar)
     faltantes_mes(df, plot=plot, salvar=salvar)
     boxplot_tudo(df, plot=plot, salvar=salvar)
     scatter_tudo(df, plot=plot, salvar=salvar)
     correlacao(df, plot=plot, salvar=salvar)
+
+

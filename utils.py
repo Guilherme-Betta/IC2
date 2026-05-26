@@ -115,7 +115,7 @@ def salvar(arquivo, nome_arquivo, index=False):
     """
 
     # Cria uma variável para guardar o caminho de onde o arquivo resultante será salvo
-    pasta_saida = BASE_DIR / "data" / "out"
+    pasta_saida = BASE_DIR / "data" / "output"
 
     # Cria um diretorio para salvar o arquivo caso ele ainda nao exista  
     pasta_saida.mkdir(parents=True, exist_ok=True)  
@@ -150,7 +150,7 @@ def salvar_visualizacao(fig, nome_arquivo, formato="png", dpi=300):
         caminho_saida : str
             Caminho do diretório em que o arquivo foi salvo
     """
-    pasta_saida = BASE_DIR / "data" / "out"
+    pasta_saida = BASE_DIR / "data" / "output" / "figures"
     pasta_saida.mkdir(parents=True, exist_ok=True)
 
     nome_arquivo = f"{nome_arquivo}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.{formato}"
@@ -208,9 +208,69 @@ def pivot(df, metadados, variaveis):
 # %%
 def unpivot(df):
     """
-    Unpivot de dataframe.
+    Unpivot de dataframe, revertendo a operação de pivot().
+    
+    Converte o DataFrame de formato wide (com colunas como 'var_estatistica') 
+    para formato long (com colunas de variáveis e uma coluna 'Estatistica').
+    
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame em formato wide, resultado da função pivot().
+    
+    Returns
+    -------
+    df_unpivot : pd.DataFrame
+        DataFrame em formato long, com metadados, Estatistica e variáveis,
+        ordenado na sequência original (Min. -> Med. -> Max.).
     """
-    # A fazer
+    # Identifica os metadados presentes (exceto 'Estatistica' que será recriada)
+    metadados_presentes = [col for col in METADADOS if col in df.columns and col != 'Estatistica']
+    
+    # Identifica as colunas de dados pivotadas (aquelas que não são metadados)
+    valor_cols = [col for col in df.columns if col not in metadados_presentes]
+    
+    # Faz melt do dataframe: converte de wide para long
+    df_melted = df.melt(id_vars=metadados_presentes, 
+                        value_vars=valor_cols,
+                        var_name='var_stat', 
+                        value_name='valor')
+    
+    # Separa a coluna 'var_stat' em variável e estatística
+    # Usa rsplit com n=1 para pegar apenas o último "_" (em caso de variáveis com "_" no nome)
+    df_melted[['variavel', 'Estatistica']] = df_melted['var_stat'].str.rsplit('_', n=1, expand=True)
+    
+    # Remove a coluna temporária
+    df_melted = df_melted.drop('var_stat', axis=1)
+    
+    # Faz pivot para voltar às variáveis como colunas
+    df_unpivot = df_melted.pivot(index=metadados_presentes + ['Estatistica'],
+                                  columns='variavel',
+                                  values='valor')
+    
+    # Reseta o índice
+    df_unpivot = df_unpivot.reset_index()
+    
+    # Remove o nome da coluna de índice
+    df_unpivot.columns.name = None
+    
+    # Ordena as estatísticas na sequência correta (Min. -> Med. -> Max.)
+    df_unpivot['Estatistica'] = pd.Categorical(
+        df_unpivot['Estatistica'], 
+        categories=['Min.', 'Med.', 'Max.'], 
+        ordered=True
+    )
+    
+    # Ordena o dataframe pela ordem de Estatistica
+    df_unpivot = df_unpivot.sort_values(by=metadados_presentes + ['Estatistica'])
+    
+    # Reseta o índice para remover os índices desordenados
+    df_unpivot = df_unpivot.reset_index(drop=True)
+    
+    # Converte Estatistica de volta para string (para ficar igual ao original)
+    df_unpivot['Estatistica'] = df_unpivot['Estatistica'].astype(str)
+    
+    return df_unpivot
 
 # %%
 def remover_nan(df, salvar_arquivo=False, nome_saida=None):

@@ -1,11 +1,38 @@
-import pandas as pd
+# %%
+import os
+from datetime import datetime
+
+import sys
+from pathlib import Path
+sys.path.append(str(Path.cwd().parent))
+
 from utils import *
+
 from analise_descritiva import casas_decimais
 
+# %% [markdown]
+# # Prep Dados Brutos
+
+# %%
 def prep_brutos(df, salvar_arquivo=True):
     """
-    Prepara dados brutos: extrai data normalizada, reseta index, e renomeia.
-    df: DataFrame de dados brutos a serem preparado (deve ter coluna 'Data', com dtype datetime)
+    Extrai data normalizada (sem horário), reseta index, e renomeia.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame com dados brutos.
+    salvar_arquivo : bool, default True
+        Determina se um arquivo Excel com os dados brutos deve ser salvo.
+
+    Returns
+    -------
+    df : pd.DataFrame
+        Versão alterada do DataFrame fornecido.
+    metadados : list
+        Lista com os nomes das colunas identificadas como metadados de df.
+    variaveis : list
+        Lista com nomes das colunas identificadas como variáveis de df.
     """
 
     # Trabalha em uma cópia para evitar modificar o original
@@ -26,26 +53,46 @@ def prep_brutos(df, salvar_arquivo=True):
 
     if salvar_arquivo:
         salvar(df, "dados_prontos")
-        
+
     return df, metadados, variaveis
 
-def limpeza(df, metadados, variaveis, threshold_missing=0.3, salvar_arquivo=True):
+# %% [markdown]
+# # Limpeza
+
+# %%
+def limpeza(df, metadados=None, variaveis=None, threshold_missing=0.3, salvar_arquivo=True):
     """
     Remove dados corrompidos e colunas com muitos dados faltantes.
-    
-    df: DataFrame de interesse;
-    metadados: Lista de colunas metadados;
-    variaveis: Lista de colunas variáveis;
-    threshold_missing: Remover colunas com % de dados faltantes acima disso (default 30%);
-    salvar_arquivo: Salvar resultado (default True).
-    
-    Retorna: 
-    df = DataFrame limpo; 
-    metadados = Novo conjunto de metadados;
-    variaveis = Novo conjunto de variáveis. 
-    """
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame a ser limpo.
+    metadados : list, default None
+        Lista com os nomes das colunas identificadas como metadados de df.
+    variaveis : list, default None
+        Lista com nomes das colunas identificadas como variáveis de df.
+    threshold_missing : float, default 0.3
+        Determina a porcentagem máxima tolerável de valores faltantes numa coluna.
+    salvar_arquivo : bool, default True
+        Determina se um arquivo Excel com o DataFrame limpo deve ser gerado.
+
+    Returns
+    -------
+    df : pd.DataFrame
+        Versão alterada do DataFrame fornecido.
+    metadados : list
+        Lista com os nomes das colunas identificadas como metadados de df.
+    variaveis : list
+        Lista com nomes das colunas identificadas como variáveis de df.
+    """    
     # Evita modificar o original
-    df = df.copy()  
+    df = df.copy()
+
+    # Determina as listas de metadados e variaveis com base em df
+    if metadados is None or variaveis is None:
+        from utils import separar_colunas
+        metadados, variaveis = separar_colunas(df)  
     
     # Converte colunas variáveis para numeric, coerce non-numeric to NaN
     for coluna in variaveis:
@@ -55,9 +102,12 @@ def limpeza(df, metadados, variaveis, threshold_missing=0.3, salvar_arquivo=True
     thresh_count = len(df) * (1 - threshold_missing)
     df = df.dropna(axis=1, thresh=thresh_count)
 
+    # Salva as novas listas de metadados e variaveis após a limpeza
     metadados, variaveis = separar_colunas(df)
     
     if salvar_arquivo:
         salvar(df, "dados_limpos")
     
     return df, metadados, variaveis
+
+

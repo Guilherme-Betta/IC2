@@ -80,16 +80,10 @@ def simular_dados_faltantes(df, pct_remover=0.05, seed=42):
     
     Returns
     -------
-    df_sim_a : pd.DataFrame
-        Dataset com NaN simulado. Cenário "a".
-        Cenário "a": NaN introduzidos apenas em colunas que tinham NaN originalmente.
-    mascara_a : pd.DataFrame
-        Máscara marcando as coordenadas de dados faltantes do cenário "a".
-    df_sim_b : pd.DataFrame
-        Dataset com NaN simulado. Cenário "b".
-        Cenário "b": NaN introduzidos em todas as colunas.
-    mascara_b : pd.DataFrame
-        Máscara marcando as coordenadas de dados faltantes do cenário "b".
+    df_sim : pd.DataFrame
+        Dataset com NaN simulado com valores removidos aleatoriamente.
+    mascara : pd.DataFrame
+        Máscara marcando as coordenadas dos dados faltantes.
     """
     
     np.random.seed(seed)
@@ -100,42 +94,26 @@ def simular_dados_faltantes(df, pct_remover=0.05, seed=42):
     # Remove todas as linhas com NaN
     df_ref = df.dropna().copy()
     
-    # Identifica colunas que originalmente tinham NaN
-    cols_com_nan = df.columns[df.isna().any()].tolist()
-    cols_com_nan = [col for col in cols_com_nan if col not in metadados]
-    
     # Todas as colunas numéricas (exceto metadados)
     todas_cols = [col for col in df_ref.columns if col not in metadados]
     
     # Cria dataset simulado
-    df_sim_a = df_ref.copy()
-    df_sim_b = df_ref.copy()
+    df_sim = df_ref.copy()
 
-    n_remover = int(len(df_sim_a) * pct_remover)
+    n_remover = int(len(df_sim) * pct_remover)
+
+    # Cria a máscara com as coordenadas dos dados faltantes
+    mascara = pd.DataFrame(False, index=df_ref.index, columns=df_ref.columns)
     
-    # Estabelece os cenários
-    colunas_alvo_a = cols_com_nan
-    mascara_a = pd.DataFrame(False, index=df_ref.index, columns=df_ref.columns)
-
-    colunas_alvo_b = todas_cols
-    mascara_b = pd.DataFrame(False, index=df_ref.index, columns=df_ref.columns)
+    # Remove valores aleatoriamente de TODAS as colunas (exceto metadados)
+    for col in todas_cols:
+        indices = np.random.choice(df_sim.index, n_remover, replace=False)
+        df_sim.loc[indices, col] = np.nan
+        mascara.loc[indices, col] = True
     
-    # Remove valores aleatoriamente apenas das colunas que tinham NaN original (cenário A)
-    for col in colunas_alvo_a:
-        indices = np.random.choice(df_sim_a.index, n_remover, replace=False)
-        df_sim_a.loc[indices, col] = np.nan
-        mascara_a.loc[indices, col] = True
+    print(f"{len(todas_cols)} colunas, {pct_remover*100}% removido")
 
-    # Remove valores aleatoriamente de TODAS as colunas (exceto metadados) (cenário B)
-    for col in colunas_alvo_b:
-        indices = np.random.choice(df_sim_b.index, n_remover, replace=False)
-        df_sim_b.loc[indices, col] = np.nan
-        mascara_b.loc[indices, col] = True
-    
-    print(f"Cenário A: {len(colunas_alvo_a)} colunas, {pct_remover*100}% removido")
-    print(f"Cenário B: {len(colunas_alvo_b)} colunas, {pct_remover*100}% removido")
-
-    return df_sim_a, mascara_a, df_sim_b, mascara_b
+    return df_sim, mascara
 
 # %% [markdown]
 # # Métricas de Avaliação
@@ -144,15 +122,15 @@ def simular_dados_faltantes(df, pct_remover=0.05, seed=42):
 # Fluxograma simplificado:
 # 0) Carregar dados
 # 
-# 1) Usar a função simular_dados_faltantes: É preciso especificar o dataframe verdadeiro e a porcentagem de dados a serem removidos (default 5%, valor utilizado para imputação via média e mediana). (i) Ela remove linhas com NaN, (ii) introduz NaN artificiais, (iii) retorna um dataframe com NaN artificiais apenas nas colunas que originalmente possuíam NaN (cenário "a"), (iv) retorna a máscara com as coordenadas desses NaN, (v) retorna um dataframe com NaN artificiais em todas as colunas, e (vi) a máscara com as coordenadas desses NaN.
+# 1) Usar a função simular_dados_faltantes: É preciso especificar o dataframe verdadeiro e a porcentagem de dados a serem removidos (default 5%, valor utilizado para imputação via média e mediana). (i) Ela remove linhas com NaN, (ii) introduz NaN artificiais, (iii) retorna um dataframe com NaN artificiais em todas as colunas, e (iv) a máscara com as coordenadas desses NaN.
 # 
 # 2) Fazer a imputação no dataframe artificial gerado na etapa anterior. É preciso especificar qual DataFrame, e se deseja-se que o DataFrame pós imputação apresente apenas as colunas que foram manipuladas (return_reduced=True)
 # 
-# 3) Fazer avaliação de imputação, utilizando a função avaliar_imputacao: É preciso especificar: (i) o dataframe real, (ii) o dataframe imputado, (iii) a máscara do dataframe imputado, (iv) o nome do método de imputação, e (v) qual cenário está sendo tratado ("a" ou "b").
+# 3) Fazer avaliação de imputação, utilizando a função avaliar_imputacao: É preciso especificar: (i) o dataframe real, (ii) o dataframe imputado, (iii) a máscara do dataframe imputado, e (iv) o nome do método de imputação.
 
 # %%
 def avaliar_imputacao(df_verdadeiro, df_imputado, mascara,
-                        metodo, cenario, pct_faltantes=None):
+                        metodo, pct_faltantes=None):
     """
     Interface simples para avaliar qualidade de imputação.
     
@@ -171,10 +149,6 @@ def avaliar_imputacao(df_verdadeiro, df_imputado, mascara,
     metodo : str
         Nome do método de imputação sendo avaliado.
         Valores esperados: "media", "mediana" ou "knn".
-    cenario : str
-        Nome do cenário sendo avaliado:
-        - "a" = avalia apenas colunas que tinham NaN original
-        - "b" = avalia TODAS as colunas numéricas
     pct_faltantes : float, optional
         Porcentagem de dados faltantes (ex: 0.05 para 5%).
         Padrão: None
@@ -189,7 +163,6 @@ def avaliar_imputacao(df_verdadeiro, df_imputado, mascara,
         - r2: coeficiente de determinação
         - n_celulas: número de células avaliadas
         - metodo: método de imputação
-        - cenario: cenário avaliado
         - pct_faltantes: percentual de dados faltantes
     """
     
@@ -225,7 +198,6 @@ def avaliar_imputacao(df_verdadeiro, df_imputado, mascara,
             "r2": r2_score(y_true, y_pred),
             "n_celulas": len(y_true),
             "metodo": metodo,
-            "cenario": cenario,
             "pct_faltantes": pct_faltantes
         })
     
@@ -238,7 +210,7 @@ def avaliacao_completa(df, seed=42):
     Orquestra a avaliação completa de todos os métodos de imputação.
     
     Executa um pipeline completo que simula dados faltantes, aplica os três
-    métodos de imputação (média, mediana, KNN) em ambos cenários e calcula
+    métodos de imputação (média, mediana, KNN), e calcula
     as métricas de desempenho para cada combinação.
     
     Parameters
@@ -252,17 +224,16 @@ def avaliacao_completa(df, seed=42):
     -------
     tabela_completa : pd.DataFrame
         DataFrame consolidado contendo métricas de todas as combinações:
-        - média e mediana: 5% de dados removidos (cenários a e b)
-        - KNN: 15% de dados removidos (cenários a e b)
+        - média e mediana: 5% de dados removidos;
+        - KNN: 15% de dados removidos.
         
-        Colunas incluem: variavel, rmse, mae, r2, n_celulas, metodo, cenario, pct_faltantes
+        Colunas incluem: variavel, rmse, mae, r2, n_celulas, metodo, pct_faltantes.
     
     Notes
     -----
-    - Método média/mediana usa 5% de remoção de dados
-    - Método KNN usa 15% de remoção de dados
-    - Cada cenário é processado separadamente
-    - Resultados são concatenados em um único DataFrame
+    - Método média/mediana usa 5% de remoção de dados;
+    - Método KNN usa 15% de remoção de dados;
+    - Resultados são concatenados em um único DataFrame.
     """
 
     from imputacao import mean_imput, median_imput, knn_imput
@@ -272,34 +243,30 @@ def avaliacao_completa(df, seed=42):
     partes = []
 
     # Para média e mediana
-    sim_a, mascara_a, sim_b, mascara_b = simular_dados_faltantes(
+    sim, mascara = simular_dados_faltantes(
         df, pct_remover=0.05, seed=seed
     )
 
-    cenarios = [("a", sim_a, mascara_a), ("b", sim_b, mascara_b)]
     metodos = [("media", mean_imput), ("mediana", median_imput)]
 
-    for cenario, sim, mascara in cenarios:
-        for nome, func in metodos:
-            imputado = func(sim, return_reduced=True)
-            partes.append(
-                avaliar_imputacao(ref, imputado, mascara, metodo=nome, cenario=cenario, pct_faltantes=0.05)
-            )
+    for nome, func in metodos:
+        imputado = func(sim, return_reduced=True)
+        partes.append(
+            avaliar_imputacao(ref, imputado, mascara, metodo=nome, pct_faltantes=0.05)
+        )
 
     # Para KNN (mesmo loop de antes, só que com ajustes para acomodar o KNN)
-    sim_a, mascara_a, sim_b, mascara_b = simular_dados_faltantes(
+    sim, mascara = simular_dados_faltantes(
         df, pct_remover=0.15, seed=seed
     )
 
-    cenarios = [("a", sim_a, mascara_a), ("b", sim_b, mascara_b)]
     metodos = [("knn", knn_imput)]
 
-    for cenario, sim, mascara in cenarios:
-        for nome, func in metodos:
-            imputado = func(sim, return_reduced=True)
-            partes.append(
-                avaliar_imputacao(ref, imputado, mascara, metodo=nome, cenario=cenario, pct_faltantes=0.15)
-            )
+    for nome, func in metodos:
+        imputado = func(sim, return_reduced=True)
+        partes.append(
+            avaliar_imputacao(ref, imputado, mascara, metodo=nome, pct_faltantes=0.15)
+        )
     
     return pd.concat(partes, ignore_index=True)
 

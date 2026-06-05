@@ -1,0 +1,55 @@
+[build-system]
+requires = ["setuptools>=65.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ic2"
+version = "0.1.0"
+description = "Data analysis workspace for IC2 research"
+readme = "README.md"
+requires-python = ">=3.9"
+authors = [
+    {name = "Guilherme Betta"},
+]
+license = {text = "MIT"}
+
+dependencies = [
+    "pandas>=2.0.0",
+    "openpyxl>=3.0.0",
+    "matplotlib>=3.0.0",
+    "seaborn>=0.12.0",
+    "numpy>=1.20.0",
+    "scipy>=1.10.0",
+    "scikit-learn>=1.0.0",
+    "statsmodels>=0.14.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "black>=23.0.0",
+    "flake8>=6.0.0",
+    "ipython>=8.0.0",
+    "jupyter>=1.0.0",
+    "notebook>=7.0.0",
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
+
+[tool.black]
+line-length = 88
+target-version = ['py39']
+
+[tool.flake8]
+max-line-length = 88
+extend-ignore = ["E203", "W503"]

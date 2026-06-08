@@ -4,12 +4,14 @@ Projeto/
 Relatório/
 Reuniões/
 
+# pycache
+__pycache__/
+
 # Ignorar o ambiente virtual do Python (MUITO IMPORTANTE)
 .venv/
 
 # Ignorar outras pastas
-.vscode
-.scripts
+.vscode/
 
 # Opcional: ignorar tipos de arquivo específicos que podem ser gerados
 # como planilhas de resultados, logs, etc.

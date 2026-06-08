@@ -1,21 +1,14 @@
 # %%
-import os
-import numpy as np
-import pandas as pd
-from datetime import datetime
 from sklearn.impute import KNNImputer
 
-import sys
-from pathlib import Path
-sys.path.append(str(Path.cwd().parent))
-from utils import dados, pivot, salvar
+from pcj.utils import salvar
 
 # %%
 def filtro_colunas(df, min_missing, max_missing):
     """
     Seleciona colunas com dados faltantes entre min_missing e max_missing.
 
-    Parameters
+    Parameters 
     ----------
     df : pd.DataFrame
         DataFrame de interesse.
@@ -29,7 +22,7 @@ def filtro_colunas(df, min_missing, max_missing):
     colunas_filtradas : list
         Lista com os nomes das colunas com dados faltantes entre min_missing e max_missing.
     """    
-    from utils import separar_colunas
+    from pcj.utils import separar_colunas
     metadados, variaveis = separar_colunas(df)
 
     # Calcula a porcentagem de dados faltantes para cada coluna
@@ -75,7 +68,7 @@ def mean_imput(df, max_missing=0.05,
     """
     df = df.copy()
 
-    from utils import separar_colunas
+    from pcj.utils import separar_colunas
     metadados, variaveis = separar_colunas(df)
 
     cols = filtro_colunas(df, min_missing=0, max_missing=max_missing)
@@ -141,7 +134,7 @@ def median_imput(df, max_missing=0.05,
     """
     df = df.copy()
 
-    from utils import separar_colunas
+    from pcj.utils import separar_colunas
     metadados, variaveis = separar_colunas(df)
 
     cols = filtro_colunas(df, min_missing=0, max_missing=max_missing)
@@ -206,7 +199,7 @@ def knn_imput(df, min_missing=0.05, max_missing=0.15,
     """
     df = df.copy()
 
-    from utils import separar_colunas
+    from pcj.utils import separar_colunas
     metadados, variaveis = separar_colunas(df)
 
     cols = filtro_colunas(df, min_missing=min_missing, max_missing=max_missing)

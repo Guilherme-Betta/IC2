@@ -1,12 +1,6 @@
 # %%
-import sys
-from pathlib import Path
-sys.path.append(str(Path.cwd().parent))
-from utils import dados, pivot, salvar
-
 import numpy as np
 import pandas as pd
-import sklearn
 
 # %% [markdown]
 # # Preparação para cálculos das métricas
@@ -88,7 +82,7 @@ def simular_dados_faltantes(df, pct_remover=0.05, seed=42):
     
     np.random.seed(seed)
     
-    from utils import separar_colunas 
+    from pcj.utils import separar_colunas 
     metadados, variaveis = separar_colunas(df)
     
     # Remove todas as linhas com NaN
@@ -166,7 +160,7 @@ def avaliar_imputacao(df_verdadeiro, df_imputado, mascara,
         - pct_faltantes: percentual de dados faltantes
     """
     
-    from utils import separar_colunas
+    from pcj.utils import separar_colunas
     metadados, variaveis = separar_colunas(df_verdadeiro)
     
     # Preparar dados
@@ -236,7 +230,7 @@ def avaliacao_completa(df, seed=42):
     - Resultados são concatenados em um único DataFrame.
     """
 
-    from imputacao import mean_imput, median_imput, knn_imput
+    from pcj.imputacao import mean_imput, median_imput, knn_imput
     
     ref = df.dropna().copy()
 

@@ -7,10 +7,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
 from sklearn.cluster import KMeans
 
-import sys
-from pathlib import Path
-sys.path.append(str(Path.cwd().parent))
-from utils import dados, pivot, salvar
+from pcj.utils import salvar
 
 # %% [markdown]
 # # Detecção de Outliers

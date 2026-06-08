@@ -10,9 +10,9 @@ from datetime import datetime
 METADADOS = ['Data', 'data_normalizada', 'Estatistica', 'Index']
 
 # %%
-# Variável que permite utilizar caminhos relativos nos jupyter notebooks
+# Variável direcionada ao diretório raiz do workspace (IC2/ folder)
 
-BASE_DIR = Path(__file__).resolve().parent
+BASE_DIR = Path(__file__).resolve().parents[2]
 
 # %%
 def separar_colunas(df):
@@ -86,13 +86,13 @@ def dados(caminho_arquivo, original=False):
     # Ela está sendo colocada nessa função dedicada aos dados brutos.
 
     if original:
-        from format import casas_decimais
+        from pcj.format import casas_decimais
         n_casas_decimais = {}
 
         for i in variaveis:
             n_casas_decimais[i] = casas_decimais(df[i])
 
-        from format import casas_decimais_padrao
+        from pcj.format import casas_decimais_padrao
         casas_decimais_padrao(n_casas_decimais)
 
         return df, metadados, variaveis, n_casas_decimais
@@ -298,5 +298,4 @@ def remover_nan(df, salvar_arquivo=False, nome_saida=None):
         salvar(df, f"{nome_saida}_no_nan")
 
     return df
-
 

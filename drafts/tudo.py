@@ -1,9 +1,9 @@
-from utils import *
-from analise_descritiva import *
-from imputacao import *
-from processamento import *
-from outliers import *
-from visualizacoes import *
+from pcj.utils import *
+from pcj.analise_descritiva import *
+from pcj.imputacao import *
+from pcj.processamento import *
+from pcj.outliers import *
+from pcj.visualizacoes import *
 
 # Carregar os dados brutos
 dados_brutos, metadados, variaveis = dados(r"data\in\dados_brutos.xlsx")

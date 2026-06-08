@@ -1,25 +1,41 @@
+# %%
 import pandas as pd
 
-_casas_decimais_padrao = None
+# %%
+n_casas_decimais_padrao = None
 
-def set_casas_decimais_padrao(n_casas_decimais):
+def casas_decimais_padrao(n_casas_decimais):
     """
-    Determina o número padrão de casas decimais para cada variável.
-    """
-    global _casas_decimais_padrao
-    _casas_decimais_padrao = n_casas_decimais
+    Determina o número padrão de casas decimais a ser utilizado
+    para cada variável.
 
-def get_casas_decimais_padrao():
-    """Retorna o número padrão de casas decimais"""
-    return _casas_decimais_padrao
+    Parameters
+    ----------
+    n_casas_decimais : dict
+        Armazena o número de casas decimais padrão a ser utilizado
+    para cada variável.
+    """    
+    global n_casas_decimais_padrao
+    n_casas_decimais_padrao = n_casas_decimais
 
+# %%
 def casas_decimais(coluna):
     """
-    Funcao que determina a quantidade de casas decimais utilizadas em UMA coluna
+    Determina a quantidade de casas decimais utilizadas em UMA coluna
     de um banco de dados.
-    Serah utilizada para padronizar o numero de casas decimais por variavel, com base
+    Será utilizada para padronizar o numero de casas decimais por variavel, com base
     no numero de casas decimais utilizadas no banco original.
-    """
+
+    Parameters
+    ----------
+    coluna : pd.Series
+        Coluna de uma base de dados.
+
+    Returns
+    -------
+    n_casas : int
+        Número máximo de casas decimais encontradas na coluna.
+    """    
     # Elimina celulas vazias e converte todos os valores da coluna para string
     textos = coluna.dropna().astype(str)    
 
@@ -34,13 +50,25 @@ def casas_decimais(coluna):
     # Retorna o valor máximo de dígitos após a casa decimal como integer
     return int(n_decimais.max())
 
+# %%
 def formatar_variaveis(describe, n_casas_decimais):
     """
-    Formata o DataFrame describe com casas decimais baseadas nos dados originais.
-    describe: DataFrame de estatísticas.
-    dados: DataFrame original.
-    variaveis: Lista de colunas variáveis.
-    """
+    Formata o DataFrame describe com precisão (número de casas decimais utilizadas por variável)
+    baseadas nos dados originais.
+
+    Parameters
+    ----------
+    describe : pd.DataFrame
+        DataFrame com o quadro de estatísticas.
+    n_casas_decimais : dict
+        Dicionário contendo o número de casas decimais
+        a ser utilizado para cada variável.
+
+    Returns
+    -------
+    describe : pd.DataFrame
+        Quadro de estatísticas com as variáveis formatadas.
+    """    
 
     # Selecao de estatisticas cujos valores devem ser formatados. 
     # Exclui as estatisticas criadas e adicionadas a tabela,
@@ -61,13 +89,28 @@ def formatar_variaveis(describe, n_casas_decimais):
         )
     return describe
 
+# %% [markdown]
+# No dataframe de estatisticas, as colunas dos metadados sao inseridas, mas boa parte das estatisticas nao sao uteis para elas. Assim, para deixar a visualizacao mais limpa, apenas as estatisticas de interesse serao selecionadas para elas
+
+# %%
 def formatar_metadados(describe, metadados):
     """
     Limpa o DataFrame describe, removendo estatísticas desnecessárias para metadados.
-    describe: DataFrame de estatísticas.
-    metadados: Lista de colunas metadados.
-    estatisticas_manter: Estatísticas a manter para metadados.
-    transpose: Permite selecionar se o quadro de estatísticas deve ser pivotado ou não (Pivotado by default).
+
+    Parameters
+    ----------
+    describe : pd.DataFrame
+        DataFrame com o quadro de estatísticas.
+    metadados : list
+        Lista de metadados presentes em describe.
+
+    Returns
+    -------
+    describe : pd.DataFrame
+        Quadro de estatísticas formatado: células contendo estatísticas
+        desnecessárias para os metadados são nulificadas, mantendo somente
+        os seus valores de interesse ('count', 'unique', 'freq').
+
     """
     # Lista de estatisticas de interesse para as colunas de metadados
     estatisticas_manter = ['count', 'unique', 'freq']
@@ -80,3 +123,5 @@ def formatar_metadados(describe, metadados):
 
     # Retorna o quadro de estatísticas
     return describe
+
+

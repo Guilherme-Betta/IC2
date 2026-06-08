@@ -1,16 +1,10 @@
 # %%
-import pandas as pd
 import missingno as msno
-import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 import math
 
-
-import sys
-from pathlib import Path
-sys.path.append(str(Path.cwd().parent))
-from utils import *
+from pcj.utils import salvar_visualizacao
 
 # %%
 # Função que auxilia no salvamento de figuras
@@ -383,6 +377,9 @@ def scatter_tudo(df, plot=False, salvar=True):
     -------
     None
     """    
+    from pcj.utils import separar_colunas
+    
+    metadados, variaveis = separar_colunas(df)
 
     fig, axes = plt.subplots(nrows=math.ceil(len(variaveis) / 4), 
                             ncols=4,
@@ -455,6 +452,8 @@ def correlacao(df, method='pearson', plot=False, salvar=True):
     -------
     None
     """    
+    from pcj.utils import separar_colunas
+    metadados, variaveis = separar_colunas(df)
 
     matriz = df[variaveis].corr(method=method)
 
@@ -510,5 +509,119 @@ def visualizacoes_todas(df, plot=False, salvar=True):
     boxplot_tudo(df, plot=plot, salvar=salvar)
     scatter_tudo(df, plot=plot, salvar=salvar)
     correlacao(df, plot=plot, salvar=salvar)
+
+# %% [markdown]
+# # Visualizações Avulsas
+
+# %% [markdown]
+# ## Validação - Gráficos de Barras 
+
+# %%
+from pcj.utils import dados
+
+dados_limpos, metadados, variaveis = dados(r"data\processed\dados_limpos.xlsx")
+
+from pcj.metricas_avaliacao import avaliacao_completa
+
+tabela_metricas = avaliacao_completa(dados_limpos)
+
+len(tabela_metricas["variavel"].unique())
+
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+# Configuração do seaborn
+sns.set_style("whitegrid")
+sns.set_palette("husl")
+
+# # Define o cenário a ser visualizado
+# cenario_selecionado = "a"
+
+# # Filtra dados para o cenário selecionado
+# tabela_metricas = tabela_metricas[tabela_metricas["cenario"] == cenario_selecionado].copy()
+
+# Obtém variáveis e métricas únicas
+variaveis_unicas = sorted(tabela_metricas["variavel"].unique())
+metricas_unicas = sorted(tabela_metricas[["rmse", "mae", "r2"]].columns)
+
+n_variaveis = len(variaveis_unicas)
+n_metricas = len(metricas_unicas)
+
+print(f"Variáveis: {n_variaveis}")
+print(f"Métricas: {n_metricas}")
+print(f"Total de gráficos: {n_variaveis * n_metricas}")
+
+# Cria figura com grid de subplots (variáveis × métricas)
+fig, ax = plt.subplots(
+    nrows=n_variaveis, 
+    ncols=n_metricas, 
+    figsize=(15, 40),
+    sharex=False,
+    sharey=False
+)
+
+# Itera sobre cada combinação de variável e métrica
+for i, variavel in enumerate(variaveis_unicas):
+    for j, metrica in enumerate(metricas_unicas):
+        
+        # Filtra dados para essa variável
+        df_var = tabela_metricas[tabela_metricas["variavel"] == variavel].copy()
+        
+        # Prepara dados para o gráfico: coloca métrica em ordem
+        df_plot = df_var[["metodo", metrica]].copy()
+        df_plot.columns = ["metodo", "valor"]
+        df_plot = df_plot.sort_values("metodo")
+        
+        # Define cores para os três métodos
+        cores = {"knn": "#FF6B6B", "media": "#4ECDC4", "mediana": "#45B7D1"}
+        palette_colors = [cores.get(m, "#95E1D3") for m in df_plot["metodo"]]
+        
+        # Cria barplot
+        ax_current = ax[i, j]
+        sns.barplot(
+            data=df_plot, 
+            x="metodo", 
+            y="valor",
+            ax=ax_current,
+            palette=palette_colors,
+            errorbar=None
+        )
+        
+        # Define título (apenas na primeira linha para cada métrica)
+        if i == 0:
+            ax_current.set_title(f"{metrica.upper()}", fontsize=12, fontweight="bold")
+        
+        # Define ylabel (apenas na primeira coluna para cada variável)
+        if j == 0:
+            ax_current.set_ylabel(f"{variavel}", fontsize=10, fontweight="bold")
+        else:
+            ax_current.set_ylabel("")
+        
+        # Define xlabel (apenas na última linha)
+        if i == n_variaveis - 1:
+            ax_current.set_xlabel("Método", fontsize=9, fontweight="bold")
+        else:
+            ax_current.set_xlabel("")
+        
+        # Garante que os rótulos do eixo x estão visíveis
+        ax_current.set_xticklabels(df_plot["metodo"].values, rotation=45, ha="right")
+        
+        # Adiciona grid horizontal
+        ax_current.grid(axis="y", alpha=0.3)
+
+# Ajusta layout
+plt.tight_layout()
+
+# Salva a visualização usando a função de utils
+from pcj.utils import salvar_visualizacao
+salvar_visualizacao(
+    fig, 
+    nome_arquivo='validacao',
+    formato="png", 
+    dpi=600
+)
+
+plt.show()
+
 
 

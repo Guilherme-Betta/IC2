@@ -1,14 +1,11 @@
 # %%
 import os
 from datetime import datetime
+import pandas as pd
 
-import sys
-from pathlib import Path
-sys.path.append(str(Path.cwd().parent))
+from pcj.utils import separar_colunas, salvar
 
-from utils import *
-
-from analise_descritiva import casas_decimais
+from pcj.format import casas_decimais
 
 # %% [markdown]
 # # Prep Dados Brutos

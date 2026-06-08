@@ -1,14 +1,9 @@
 # %%
 import pandas as pd
-import matplotlib.pyplot as plt
-from lifelines import KaplanMeierFitter
+# from lifelines import KaplanMeierFitter
 
-import sys
-from pathlib import Path
-sys.path.append(str(Path.cwd().parent))
-from utils import dados, pivot, salvar
-from processamento import prep_brutos
-from format import *
+from pcj.utils import salvar
+from pcj.format import formatar_metadados, formatar_variaveis
 
 # %%
 def estatisticas_descritivas(df):
@@ -177,7 +172,7 @@ def analise_descritiva(df,
 
     # Determina as listas de metadados e variaveis com base em df
     if metadados is None or variaveis is None:
-        from utils import separar_colunas
+        from pcj.utils import separar_colunas
         metadados, variaveis = separar_colunas(df)
 
     # Determina o número de casas decimais a ser utilizada em cada variavel com base no dicionário gerado na leitura dos dados originais

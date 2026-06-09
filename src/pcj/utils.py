@@ -12,7 +12,7 @@ METADADOS = ['Data', 'data_normalizada', 'Estatistica', 'Index']
 # %%
 # Variável direcionada ao diretório raiz do workspace
 
-BASE_DIR = Path(__file__).resolve().parent
+BASE_DIR = Path(__file__).resolve().parents[2]
 
 # %%
 def separar_colunas(df):

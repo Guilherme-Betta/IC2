@@ -13,7 +13,7 @@ __pycache__/
 # Ignorar outras pastas
 .vscode/
 .temp/
-.archives/
+archives/
 
 # Opcional: ignorar tipos de arquivo específicos que podem ser gerados
 # como planilhas de resultados, logs, etc.

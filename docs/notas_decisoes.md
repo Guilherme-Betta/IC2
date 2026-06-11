@@ -1,0 +1,1 @@
+Preencher com explicações das decisões tomadas, por exemplo: “por que 5% para média”, “cenário A vs B”, etc.

@@ -421,7 +421,7 @@ def scatter_tudo(df, plot=False, salvar=True):
     plt.tight_layout()
 
     if salvar:
-        salvar_visualizacao('scatterplots')
+        salvar_plot('scatterplots')
 
     if plot:
         plt.show()
@@ -472,7 +472,7 @@ def correlacao(df, method='pearson', plot=False, salvar=True):
     plt.tight_layout()
 
     if salvar:
-        salvar_visualizacao('correlacao_de', method)
+        salvar_plot('correlacao_de', method)
 
     if plot:
         plt.show()

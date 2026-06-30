@@ -24,3 +24,6 @@ archives/
 *.gsheet
 *.gslides
 *.gdraw
+
+# Claude Local
+CLAUDE.local.md

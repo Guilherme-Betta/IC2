@@ -1,0 +1,41 @@
+# ==========================================
+# REGRAS ESPECÍFICAS (Devem vir primeiro)
+# Removem os prefixos numéricos dos scripts
+# ==========================================
+[[formats]]
+"notebooks/0_" = "ipynb"
+"src/pcj/" = "py:percent"
+
+[[formats]]
+"notebooks/1_" = "ipynb"
+"src/pcj/" = "py:percent"
+
+[[formats]]
+"notebooks/2_" = "ipynb"
+"src/pcj/" = "py:percent"
+
+[[formats]]
+"notebooks/3_" = "ipynb"
+"src/pcj/" = "py:percent"
+
+[[formats]]
+"notebooks/4_" = "ipynb"
+"src/pcj/" = "py:percent"
+
+[[formats]]
+"notebooks/5_" = "ipynb"
+"src/pcj/" = "py:percent"
+
+[[formats]]
+"notebooks/6_" = "ipynb"
+"src/pcj/" = "py:percent"
+
+# Talvez seja preciso adicionar novas linhas
+
+# ==========================================
+# REGRA GENÉRICA / FALLBACK (Deve vir por último para evitar duplicatas)
+# Para notebooks reutilizáveis sem numeração
+# ==========================================
+[[formats]]
+"notebooks/" = "ipynb"
+"src/pcj/" = "py:percent"

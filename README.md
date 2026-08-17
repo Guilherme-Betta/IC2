@@ -64,3 +64,31 @@ Este repositório contém os scripts necessários para atingir os seguintes obje
 
    ```bash
    pip install -r requirements.txt
+   ```
+
+---
+
+## 📓 Estrutura do Pipeline (Notebooks)
+
+<!-- ESQUELETO / TEMPLATE — preencher as descrições depois.
+     Os notebooks perderam o prefixo numérico (0_, 1_, ...); a ordem do
+     pipeline principal fica registrada aqui para não se perder. -->
+
+**Ordem do pipeline principal:**
+
+1. [utils.ipynb](notebooks/utils.ipynb) — _(descrição)_
+2. [processamento.ipynb](notebooks/processamento.ipynb) — _(descrição)_
+3. [outliers.ipynb](notebooks/outliers.ipynb) — _(descrição)_
+4. [imputacao.ipynb](notebooks/imputacao.ipynb) — _(descrição)_
+5. [modelos_ML.ipynb](notebooks/modelos_ML.ipynb) — _(descrição)_
+6. [metricas_avaliacao.ipynb](notebooks/metricas_avaliacao.ipynb) — _(descrição)_
+7. [validacao.ipynb](notebooks/validacao.ipynb) — _(descrição)_
+
+**Notebooks auxiliares (sem ordem fixa):**
+
+- [analise_descritiva.ipynb](notebooks/analise_descritiva.ipynb) — _(descrição)_
+- [format.ipynb](notebooks/format.ipynb) — _(descrição)_
+- [visualizacoes.ipynb](notebooks/visualizacoes.ipynb) — _(descrição)_
+
+> Cada notebook é pareado com um script em `src/pcj/` via jupytext
+> (ver `jupytext.toml`). Sincronizar: `jupytext --sync notebooks\*.ipynb`.

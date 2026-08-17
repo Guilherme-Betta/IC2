@@ -1,3 +1,17 @@
+# ---
+# jupyter:
+#   jupytext:
+#     text_representation:
+#       extension: .py
+#       format_name: percent
+#       format_version: '1.3'
+#       jupytext_version: 1.19.5
+#   kernelspec:
+#     display_name: .venv (3.14.2)
+#     language: python
+#     name: python3
+# ---
+
 # %%
 import numpy as np
 import pandas as pd
@@ -9,6 +23,7 @@ from sklearn.cluster import KMeans
 
 from pcj.utils import salvar
 
+
 # %% [markdown]
 # # Detecção de Outliers
 
@@ -17,16 +32,16 @@ from pcj.utils import salvar
 # - Z-Score;
 # - IQR;
 # - Z-Test - Para ser útil, precisa-se de valores médios para cada variável para colocar no argumento "value=" do método utilizado.
-# 
+#
 # Métodos de Regressão:
 # - NAIVE;
 # - ARIMA.
-# 
+#
 # Métodos Multivariaados Não Supervisionados:
 # - LOF;
 # - STRAY;
 # - Distance From The Mean.
-# 
+#
 # Clustering:
 # - PCA --> K-Means.
 
@@ -70,6 +85,7 @@ def detect_outliers_zscore(df, variaveis, threshold=3):
     total_outliers_z = outliers_zscore.any(axis=1).sum()
     
     return outliers_por_coluna_z, total_outliers_z, outliers_zscore
+
 
 # %% [markdown]
 # ##### IQR
@@ -122,6 +138,7 @@ def detect_outliers_iqr(df, variaveis):
     
     return total_outliers_iqr, total_linhas_outliers_iqr, outliers_por_linha_iqr
 
+
 # %% [markdown]
 # ##### LOF
 
@@ -164,6 +181,7 @@ def detect_outliers_lof(df, variaveis, n_neighbors=20, contamination='auto'):
     print(f"Média dos scores LOF: {outlier_scores.mean():.3f}")
     
     return num_outliers, outlier_labels, outlier_scores
+
 
 # %% [markdown]
 # ##### PCA --> K-Means
@@ -220,6 +238,7 @@ def detect_outliers_pca_kmeans(df, variaveis, n_clusters=3, random_state=42):
     
     return num_outliers, limiar_outlier, distancias
 
+
 # %% [markdown]
 # ##### Todos
 
@@ -262,6 +281,7 @@ def detect_outliers(df, variaveis, methods=None):
     
     return results
 
+
 # %% [markdown]
 # # Remoção de Outliers
 
@@ -298,6 +318,7 @@ def remove_outliers_zscore(df, variaveis, threshold=3, salvar_arquivo=True):
     
     return df_clean
 
+
 # %% [markdown]
 # ##### IQR
 
@@ -327,6 +348,7 @@ def remove_outliers_iqr(df, variaveis, salvar_arquivo=True):
         salvar(df_clean, "outliers_removed_iqr")
     
     return df_clean
+
 
 # %% [markdown]
 # ##### LOF
@@ -363,6 +385,7 @@ def remove_outliers_lof(df, variaveis, n_neighbors=20, contamination='auto', sal
         salvar(df_clean, "outliers_removed_lof")
     
     return df_clean
+
 
 # %% [markdown]
 # ##### Todos
@@ -408,5 +431,3 @@ def remove_outliers(df, variaveis, method='zscore', salvar_arquivo=True, **kwarg
         return remove_outliers_lof(df, variaveis, salvar_arquivo=salvar_arquivo, **kwargs)
     else:
         raise ValueError(f"Unknown method: {method}")
-
-

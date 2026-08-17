@@ -1,3 +1,17 @@
+# ---
+# jupyter:
+#   jupytext:
+#     text_representation:
+#       extension: .py
+#       format_name: percent
+#       format_version: '1.3'
+#       jupytext_version: 1.19.5
+#   kernelspec:
+#     display_name: .venv (3.14.2.final.0)
+#     language: python
+#     name: python3
+# ---
+
 # %%
 import missingno as msno
 import matplotlib.pyplot as plt
@@ -5,6 +19,7 @@ import seaborn as sns
 import math
 
 from pcj.utils import salvar_visualizacao
+
 
 # %%
 # Função que auxilia no salvamento de figuras
@@ -23,6 +38,7 @@ def salvar_plot(nome):
     """
     salvar_visualizacao(plt.gcf(), nome)
     plt.close()
+
 
 # %% [markdown]
 # # Boxplots
@@ -43,6 +59,7 @@ estilo_outliers = dict(             # Determina a formatação dos pontos outlie
     marker = 'o',                   # Determina o formato dos pontos (no caso, círculos perfeitos)
     alpha = 0.5                     # Determina a opacidade / transparência dos pontos
 )
+
 
 # %%
 def boxplot_tudo(df, plot=False, salvar=True):
@@ -89,6 +106,7 @@ def boxplot_tudo(df, plot=False, salvar=True):
             salvar_plot('boxplot_tudo')
     else:
         print('Esse dataframe não apresenta coluna \'Estatistica\'. Talvez você tenha usado um dataframe pivotado?')
+
 
 # %%
 def boxplot_estatisticas(df, plot=False, salvar=True):
@@ -194,6 +212,7 @@ def boxplot_estatisticas(df, plot=False, salvar=True):
         if salvar:
             salvar_plot("boxplots_max")
 
+
 # %% [markdown]
 # # Dados Faltantes
 
@@ -255,6 +274,7 @@ def visualizacoes_missingno(df, plot=False, salvar=True):
     if not plot:
         plt.close()   
 
+
 # %%
 # Taxa de faltantes / ano (0 → completo, 1 → tudo faltando)
 def faltantes_ano(df, plot=False, salvar=True):
@@ -303,6 +323,7 @@ def faltantes_ano(df, plot=False, salvar=True):
 
    if plot:
       plt.show()
+
 
 # %%
 # Taxa de faltantes / mês
@@ -353,6 +374,7 @@ def faltantes_mes(df, plot=False, salvar=True):
 
     if plot:
         plt.show()
+
 
 # %% [markdown]
 # # Scatter Plots
@@ -426,6 +448,7 @@ def scatter_tudo(df, plot=False, salvar=True):
     if plot:
         plt.show()
 
+
 # %% [markdown]
 # # Correlação
 
@@ -477,6 +500,7 @@ def correlacao(df, method='pearson', plot=False, salvar=True):
     if plot:
         plt.show()
 
+
 # %% [markdown]
 # # Todas as Visualizações
 
@@ -509,6 +533,7 @@ def visualizacoes_todas(df, plot=False, salvar=True):
     boxplot_tudo(df, plot=plot, salvar=salvar)
     scatter_tudo(df, plot=plot, salvar=salvar)
     correlacao(df, plot=plot, salvar=salvar)
+
 
 # %% [markdown]
 # # Visualizações Avulsas
@@ -622,6 +647,4 @@ salvar_visualizacao(
 )
 
 plt.show()
-
-
 

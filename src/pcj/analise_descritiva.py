@@ -1,9 +1,24 @@
+# ---
+# jupyter:
+#   jupytext:
+#     text_representation:
+#       extension: .py
+#       format_name: percent
+#       format_version: '1.3'
+#       jupytext_version: 1.19.5
+#   kernelspec:
+#     display_name: .venv (3.14.2)
+#     language: python
+#     name: python3
+# ---
+
 # %%
 import pandas as pd
 # from lifelines import KaplanMeierFitter
 
 from pcj.utils import salvar
 from pcj.format import formatar_metadados, formatar_variaveis
+
 
 # %%
 def estatisticas_descritivas(df):
@@ -21,6 +36,7 @@ def estatisticas_descritivas(df):
         Quadro completo de estatísticas descritivas do método "pd.describe" de df.
     """
     return df.describe(include='all')
+
 
 # %% [markdown]
 # # Dados Ausentes
@@ -71,6 +87,7 @@ def calculate_missing_percentage(df1, df2):
         'by_column': missing_percentage_by_column,
         'total': missing_percentage_total
     }
+
 
 # %% [markdown]
 # # Dados não numéricos
@@ -132,6 +149,7 @@ def corrupted_data(df1, df2, variaveis):
         'total': corrupted_percentage_total
     }
 
+
 # %% [markdown]
 # # Função para análise descritiva completa
 # Reúne todas as funções e executa todos os passos de uma vez
@@ -191,5 +209,3 @@ def analise_descritiva(df,
         salvar(describe, "describe", index=True)
 
     return describe
-
-

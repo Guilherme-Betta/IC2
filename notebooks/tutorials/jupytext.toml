@@ -1,0 +1,3 @@
+# Os notebooks de tutorial NAO sao pareados com .py.
+# Esta config (mais proxima dos tutoriais) tem prioridade sobre a da raiz.
+formats = "ipynb"

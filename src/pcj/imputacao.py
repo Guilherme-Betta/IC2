@@ -1,7 +1,22 @@
+# ---
+# jupyter:
+#   jupytext:
+#     text_representation:
+#       extension: .py
+#       format_name: percent
+#       format_version: '1.3'
+#       jupytext_version: 1.19.5
+#   kernelspec:
+#     display_name: .venv
+#     language: python
+#     name: python3
+# ---
+
 # %%
 from sklearn.impute import KNNImputer
 
 from pcj.utils import salvar
+
 
 # %%
 def filtro_colunas(df, min_missing, max_missing):
@@ -30,6 +45,7 @@ def filtro_colunas(df, min_missing, max_missing):
 
     # Filtra colunas que estão no intervalo [min_missing, max_missing]
     return fracao_faltantes[(fracao_faltantes >= min_missing) & (fracao_faltantes <= max_missing)].index.tolist()
+
 
 # %% [markdown]
 # # Média
@@ -97,6 +113,7 @@ def mean_imput(df, max_missing=0.05,
     
     return df
 
+
 # %% [markdown]
 # # Mediana
 
@@ -163,13 +180,14 @@ def median_imput(df, max_missing=0.05,
     
     return df
 
+
 # %% [markdown]
 # # KNN
-# 
-# 5 - 15% de dados faltantes
+#
+# 5 - 30% de dados faltantes
 
 # %%
-def knn_imput(df, min_missing=0.05, max_missing=0.15, 
+def knn_imput(df, min_missing=0.05, max_missing=0.3, 
               return_reduced=False, save_missing_pct=False, salvar_arquivo=False):
     """
     Faz a imputação dos dados faltantes via KNN (método do sklearn).
@@ -180,7 +198,7 @@ def knn_imput(df, min_missing=0.05, max_missing=0.15,
         DataFrame de interesse.
     min_missing : float, default 0.05
         Determina a fração mínima de dados faltantes tolerados numa coluna.
-    max_missing : float, default 0.15
+    max_missing : float, default 0.3
         Determina a fração máxima de dados faltantes tolerados numa coluna.
     return_reduced : bool, default False
         Se True, retorna apenas as colunas que receberam imputação.
@@ -235,10 +253,3 @@ def knn_imput(df, min_missing=0.05, max_missing=0.15,
         return df, missing_pct
 
     return df
-
-# %% [markdown]
-# # KNN - Escalonamento
-# 
-# 15 - 30% de dados faltantes
-
-

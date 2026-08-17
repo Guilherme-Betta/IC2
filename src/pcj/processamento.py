@@ -1,3 +1,17 @@
+# ---
+# jupyter:
+#   jupytext:
+#     text_representation:
+#       extension: .py
+#       format_name: percent
+#       format_version: '1.3'
+#       jupytext_version: 1.19.5
+#   kernelspec:
+#     display_name: .venv (3.14.2.final.0)
+#     language: python
+#     name: python3
+# ---
+
 # %%
 import os
 from datetime import datetime
@@ -6,6 +20,7 @@ import pandas as pd
 from pcj.utils import separar_colunas, salvar
 
 from pcj.format import casas_decimais
+
 
 # %% [markdown]
 # # Prep Dados Brutos
@@ -53,6 +68,7 @@ def prep_brutos(df, salvar_arquivo=True):
 
     return df, metadados, variaveis
 
+
 # %% [markdown]
 # # Limpeza
 
@@ -88,7 +104,7 @@ def limpeza(df, metadados=None, variaveis=None, threshold_missing=0.3, salvar_ar
 
     # Determina as listas de metadados e variaveis com base em df
     if metadados is None or variaveis is None:
-        from utils import separar_colunas
+        from pcj.utils import separar_colunas
         metadados, variaveis = separar_colunas(df)  
     
     # Converte colunas variáveis para numeric, coerce non-numeric to NaN
@@ -106,5 +122,3 @@ def limpeza(df, metadados=None, variaveis=None, threshold_missing=0.3, salvar_ar
         salvar(df, "dados_limpos")
     
     return df, metadados, variaveis
-
-

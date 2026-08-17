@@ -1,5 +1,18 @@
+# ---
+# jupyter:
+#   jupytext:
+#     text_representation:
+#       extension: .py
+#       format_name: percent
+#       format_version: '1.3'
+#       jupytext_version: 1.19.5
+#   kernelspec:
+#     display_name: .venv (3.14.2.final.0)
+#     language: python
+#     name: python3
+# ---
+
 # %%
-import os
 import pandas as pd
 from pathlib import Path
 from datetime import datetime
@@ -13,6 +26,7 @@ METADADOS = ['Data', 'data_normalizada', 'Estatistica', 'Index']
 # Variável direcionada ao diretório raiz do workspace
 
 BASE_DIR = Path(__file__).resolve().parents[2]
+
 
 # %%
 def separar_colunas(df):
@@ -34,6 +48,7 @@ def separar_colunas(df):
     metadados = [col for col in METADADOS if col in df.columns]
     variaveis = [col for col in df.columns if col not in metadados]
     return metadados, variaveis
+
 
 # %%
 def dados(caminho_arquivo, original=False):
@@ -99,6 +114,7 @@ def dados(caminho_arquivo, original=False):
     
     return df, metadados, variaveis
 
+
 # %%
 def salvar(arquivo, nome_arquivo, index=False):
     """
@@ -128,6 +144,7 @@ def salvar(arquivo, nome_arquivo, index=False):
 
     # Gera o arquivo de saida
     arquivo.to_excel(caminho_saida, engine='openpyxl', index=index)
+
 
 # %%
 def salvar_visualizacao(fig, nome_arquivo, formato="png", dpi=300):
@@ -159,6 +176,7 @@ def salvar_visualizacao(fig, nome_arquivo, formato="png", dpi=300):
     fig.savefig(caminho_saida, dpi=dpi, bbox_inches="tight")
     print(f"Visualização salva em: {caminho_saida}")
     return caminho_saida
+
 
 # %%
 def pivot(df, metadados, variaveis):
@@ -204,6 +222,7 @@ def pivot(df, metadados, variaveis):
     
     # Retorna o dataframe
     return df_pivot.reset_index()
+
 
 # %%
 def unpivot(df):
@@ -272,6 +291,7 @@ def unpivot(df):
     
     return df_unpivot
 
+
 # %%
 def remover_nan(df, salvar_arquivo=False, nome_saida=None):
     """
@@ -298,5 +318,3 @@ def remover_nan(df, salvar_arquivo=False, nome_saida=None):
         salvar(df, f"{nome_saida}_no_nan")
 
     return df
-
-

@@ -1,39 +1,11 @@
-# ==========================================
-# REGRAS ESPECÍFICAS (Devem vir primeiro)
-# Removem os prefixos numéricos dos scripts
-# ==========================================
-[[formats]]
-"notebooks/0_" = "ipynb"
-"src/pcj/" = "py:percent"
-
-[[formats]]
-"notebooks/1_" = "ipynb"
-"src/pcj/" = "py:percent"
-
-[[formats]]
-"notebooks/2_" = "ipynb"
-"src/pcj/" = "py:percent"
-
-[[formats]]
-"notebooks/3_" = "ipynb"
-"src/pcj/" = "py:percent"
-
-[[formats]]
-"notebooks/4_" = "ipynb"
-"src/pcj/" = "py:percent"
-
-[[formats]]
-"notebooks/5_" = "ipynb"
-"src/pcj/" = "py:percent"
-
-[[formats]]
-"notebooks/6_" = "ipynb"
-"src/pcj/" = "py:percent"
-
-# ==========================================
-# REGRA GENÉRICA / FALLBACK (Deve vir por último)
-# Para notebooks reutilizáveis sem numeração
-# ==========================================
-[[formats]]
+# Pareamento notebooks <-> scripts com jupytext.
+#
+# Uma UNICA tabela [formats] (colchetes simples). Cada chave e um prefixo de
+# pasta; o nome-base do arquivo e compartilhado entre os dois lados:
+#   notebooks/X.ipynb  <->  src/pcj/X.py
+#
+# Por isso os notebooks ficam com nomes limpos (sem o prefixo numerico 0_, 1_...):
+# 'import 0_utils' seria invalido em Python, entao o .py precisa ser 'utils.py'.
+[formats]
 "notebooks/" = "ipynb"
 "src/pcj/" = "py:percent"

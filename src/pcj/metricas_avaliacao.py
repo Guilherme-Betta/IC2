@@ -1,6 +1,48 @@
+# ---
+# jupyter:
+#   jupytext:
+#     text_representation:
+#       extension: .py
+#       format_name: percent
+#       format_version: '1.3'
+#       jupytext_version: 1.19.5
+#   kernelspec:
+#     display_name: .venv (3.14.2.final.0)
+#     language: python
+#     name: python3
+# ---
+
 # %%
 import numpy as np
 import pandas as pd
+from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+
+
+# %% [markdown]
+# # Funções auxiliares
+
+# %%
+def regression_metrics(y_true, y_pred):
+    rmse = np.sqrt(mean_squared_error(y_true, y_pred))
+    mae = mean_absolute_error(y_true, y_pred)
+    r2 = r2_score(y_true, y_pred)
+    return {'rmse': rmse, 'mae': mae, 'r2': r2}
+
+
+# %%
+def evaluate_regressor(model, X_test, y_test, feature_names=None, target_name=None):
+    y_pred = model.predict(X_test)
+    metrics = regression_metrics(y_test, y_pred)
+    return {
+        'model': model,
+        'x_test': X_test,
+        'y_test': y_test,
+        'y_pred': y_pred,
+        'metrics': metrics,
+        'feature_names': feature_names,
+        'target': target_name
+    }
+
 
 # %% [markdown]
 # # Preparação para cálculos das métricas
@@ -54,6 +96,7 @@ def preparar_para_metricas(df_verdadeiro, df_predito, metadados):
     print(f"Total de colunas: {len(colunas_usadas)}")
     
     return df_verdadeiro_prep, df_predito_prep, colunas_usadas
+
 
 # %% [markdown]
 # # Introdução artificial de NaN
@@ -109,17 +152,18 @@ def simular_dados_faltantes(df, pct_remover=0.05, seed=42):
 
     return df_sim, mascara
 
+
 # %% [markdown]
 # # Métricas de Avaliação
 
 # %% [markdown]
 # Fluxograma simplificado:
 # 0) Carregar dados
-# 
+#
 # 1) Usar a função simular_dados_faltantes: É preciso especificar o dataframe verdadeiro e a porcentagem de dados a serem removidos (default 5%, valor utilizado para imputação via média e mediana). (i) Ela remove linhas com NaN, (ii) introduz NaN artificiais, (iii) retorna um dataframe com NaN artificiais em todas as colunas, e (iv) a máscara com as coordenadas desses NaN.
-# 
+#
 # 2) Fazer a imputação no dataframe artificial gerado na etapa anterior. É preciso especificar qual DataFrame, e se deseja-se que o DataFrame pós imputação apresente apenas as colunas que foram manipuladas (return_reduced=True)
-# 
+#
 # 3) Fazer avaliação de imputação, utilizando a função avaliar_imputacao: É preciso especificar: (i) o dataframe real, (ii) o dataframe imputado, (iii) a máscara do dataframe imputado, e (iv) o nome do método de imputação.
 
 # %%
@@ -198,6 +242,7 @@ def avaliar_imputacao(df_verdadeiro, df_imputado, mascara,
     # Converte a lista "linhas" para DataFrame
     return pd.DataFrame(linhas)
 
+
 # %%
 def avaliacao_completa(df, seed=42):
     """
@@ -226,7 +271,7 @@ def avaliacao_completa(df, seed=42):
     Notes
     -----
     - Método média/mediana usa 5% de remoção de dados;
-    - Método KNN usa 15% de remoção de dados;
+    - Método KNN usa 30% de remoção de dados;
     - Resultados são concatenados em um único DataFrame.
     """
 
@@ -251,7 +296,7 @@ def avaliacao_completa(df, seed=42):
 
     # Para KNN (mesmo loop de antes, só que com ajustes para acomodar o KNN)
     sim, mascara = simular_dados_faltantes(
-        df, pct_remover=0.15, seed=seed
+        df, pct_remover=0.3, seed=seed
     )
 
     metodos = [("knn", knn_imput)]
@@ -259,9 +304,7 @@ def avaliacao_completa(df, seed=42):
     for nome, func in metodos:
         imputado = func(sim, return_reduced=True)
         partes.append(
-            avaliar_imputacao(ref, imputado, mascara, metodo=nome, pct_faltantes=0.15)
+            avaliar_imputacao(ref, imputado, mascara, metodo=nome, pct_faltantes=0.3)
         )
     
     return pd.concat(partes, ignore_index=True)
-
-

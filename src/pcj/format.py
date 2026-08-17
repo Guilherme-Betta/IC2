@@ -1,3 +1,17 @@
+# ---
+# jupyter:
+#   jupytext:
+#     text_representation:
+#       extension: .py
+#       format_name: percent
+#       format_version: '1.3'
+#       jupytext_version: 1.19.5
+#   kernelspec:
+#     display_name: .venv (3.14.2)
+#     language: python
+#     name: python3
+# ---
+
 # %%
 import pandas as pd
 
@@ -17,6 +31,7 @@ def casas_decimais_padrao(n_casas_decimais):
     """    
     global n_casas_decimais_padrao
     n_casas_decimais_padrao = n_casas_decimais
+
 
 # %%
 def casas_decimais(coluna):
@@ -49,6 +64,7 @@ def casas_decimais(coluna):
 
     # Retorna o valor máximo de dígitos após a casa decimal como integer
     return int(n_decimais.max())
+
 
 # %%
 def formatar_variaveis(describe, n_casas_decimais):
@@ -89,6 +105,7 @@ def formatar_variaveis(describe, n_casas_decimais):
         )
     return describe
 
+
 # %% [markdown]
 # No dataframe de estatisticas, as colunas dos metadados sao inseridas, mas boa parte das estatisticas nao sao uteis para elas. Assim, para deixar a visualizacao mais limpa, apenas as estatisticas de interesse serao selecionadas para elas
 
@@ -123,5 +140,3 @@ def formatar_metadados(describe, metadados):
 
     # Retorna o quadro de estatísticas
     return describe
-
-

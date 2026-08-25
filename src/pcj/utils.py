@@ -18,6 +18,14 @@ from pathlib import Path
 from datetime import datetime
 
 # %%
+# Comando de sincronização Jupytext
+"""
+
+.\.venv\Scripts\python.exe -m jupytext --sync notebooks\*.ipynb
+
+"""
+
+# %%
 # Lista fixa com metadados que podem estar presentes nas bases de dados
 
 METADADOS = ['Data', 'data_normalizada', 'Estatistica', 'Index']

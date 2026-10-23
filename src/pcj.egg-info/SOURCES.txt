@@ -1,3 +1,4 @@
+LICENSE
 README.md
 pyproject.toml
 src/pcj/__init__.py
@@ -5,9 +6,11 @@ src/pcj/analise_descritiva.py
 src/pcj/format.py
 src/pcj/imputacao.py
 src/pcj/metricas_avaliacao.py
+src/pcj/modelos_ML.py
 src/pcj/outliers.py
 src/pcj/processamento.py
 src/pcj/utils.py
+src/pcj/validacao.py
 src/pcj/visualizacoes.py
 src/pcj.egg-info/PKG-INFO
 src/pcj.egg-info/SOURCES.txt

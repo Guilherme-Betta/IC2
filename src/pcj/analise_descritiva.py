@@ -23,7 +23,7 @@ from pcj.format import formatar_metadados, formatar_variaveis
 # %%
 def estatisticas_descritivas(df):
     """
-    Gera o quadro de estatísticas descritivas do método "pd.describe" do DataFrame de interesse. 
+    Gera o quadro de estatísticas descritivas do método "pd.describe()" do DataFrame de interesse. 
 
     Parameters
     ----------

@@ -502,6 +502,76 @@ def correlacao(df, method='pearson', plot=False, salvar=True):
 
 
 # %% [markdown]
+# # K-Means
+
+# %%
+def k_means_clusters(df, variaveis=False, 
+                     n_clusters=10, pca=False, norm=False):
+    
+    from sklearn.cluster import KMeans
+
+    n_clusters_list = list(range(2, int(n_clusters) + 1))
+
+    X = df.copy()
+
+    if not variaveis:
+        from pcj.utils import separar_colunas
+        metadados, variaveis = separar_colunas(df)
+
+    # Eliminar células vazias
+    X = X[variaveis].dropna(axis=0, how='any')
+    
+    # Salvar o Index do DataFrame sem células vazias numa variável
+    idx_nonan = X.index
+
+    # Trasnformar em numpy array (a sintaxe de dois índices ([:, 0]) não é válida para pd.DataFrames. O pandas lança InvalidIndexError.)
+
+    X = X.to_numpy()
+
+    # Normalização dos dados. É um pré requisito para o PCA funcionar
+    if norm or pca:
+        from sklearn.preprocessing import StandardScaler
+
+        scaler = StandardScaler()   # Coloca todas as variáveis na mesma escala, com média = 0 e desvio padrão = 1.
+        X = scaler.fit_transform(X)
+
+    # Redução da dimensionalidade
+    if pca:
+        from sklearn.decomposition import PCA
+        pca = PCA(n_components=0.95, # Mantém 95% da variância
+                random_state=0)
+        X = pca.fit_transform(X)
+
+    # Geração de figuras
+    fig, axs = plt.subplots(
+        1,
+        len(n_clusters_list),
+        figsize=(20, 10)
+    )
+
+    axs = axs.T
+
+    for i, n_clusters in enumerate(n_clusters_list):
+        kmeans = KMeans(n_clusters=n_clusters, random_state=0, n_init="auto")
+        kmeans.fit(X)
+        centers = kmeans.cluster_centers_
+
+        axs[i].scatter(X[:, 0], X[:, 1], s=10, c=kmeans.labels_)
+        axs[i].scatter(centers[:, 0], centers[:, 1], c="r", s=20)
+
+        axs[i].set_title(f"{kmeans} : {n_clusters} clusters")
+
+    for ax in axs.flat:
+        ax.label_outer()
+        ax.set_xticks([])
+        ax.set_yticks([])
+
+    plt.tight_layout()
+
+    plt.show()
+
+
+# %% [markdown]
 # # Todas as Visualizações
 
 # %%
@@ -526,125 +596,10 @@ def visualizacoes_todas(df, plot=False, salvar=True):
     Returns
     -------
     None
-    """        # 
+    """
     visualizacoes_missingno(df, plot=plot, salvar=salvar)
     faltantes_ano(df, plot=plot, salvar=salvar)
     faltantes_mes(df, plot=plot, salvar=salvar)
     boxplot_tudo(df, plot=plot, salvar=salvar)
     scatter_tudo(df, plot=plot, salvar=salvar)
     correlacao(df, plot=plot, salvar=salvar)
-
-
-# %% [markdown]
-# # Visualizações Avulsas
-
-# %% [markdown]
-# ## Validação - Gráficos de Barras 
-
-# %%
-from pcj.utils import dados
-
-dados_limpos, metadados, variaveis = dados(r"data\processed\dados_limpos.xlsx")
-
-from pcj.metricas_avaliacao import avaliacao_completa
-
-tabela_metricas = avaliacao_completa(dados_limpos)
-
-len(tabela_metricas["variavel"].unique())
-
-import matplotlib.pyplot as plt
-import seaborn as sns
-
-# Configuração do seaborn
-sns.set_style("whitegrid")
-sns.set_palette("husl")
-
-# # Define o cenário a ser visualizado
-# cenario_selecionado = "a"
-
-# # Filtra dados para o cenário selecionado
-# tabela_metricas = tabela_metricas[tabela_metricas["cenario"] == cenario_selecionado].copy()
-
-# Obtém variáveis e métricas únicas
-variaveis_unicas = sorted(tabela_metricas["variavel"].unique())
-metricas_unicas = sorted(tabela_metricas[["rmse", "mae", "r2"]].columns)
-
-n_variaveis = len(variaveis_unicas)
-n_metricas = len(metricas_unicas)
-
-print(f"Variáveis: {n_variaveis}")
-print(f"Métricas: {n_metricas}")
-print(f"Total de gráficos: {n_variaveis * n_metricas}")
-
-# Cria figura com grid de subplots (variáveis × métricas)
-fig, ax = plt.subplots(
-    nrows=n_variaveis, 
-    ncols=n_metricas, 
-    figsize=(15, 40),
-    sharex=False,
-    sharey=False
-)
-
-# Itera sobre cada combinação de variável e métrica
-for i, variavel in enumerate(variaveis_unicas):
-    for j, metrica in enumerate(metricas_unicas):
-        
-        # Filtra dados para essa variável
-        df_var = tabela_metricas[tabela_metricas["variavel"] == variavel].copy()
-        
-        # Prepara dados para o gráfico: coloca métrica em ordem
-        df_plot = df_var[["metodo", metrica]].copy()
-        df_plot.columns = ["metodo", "valor"]
-        df_plot = df_plot.sort_values("metodo")
-        
-        # Define cores para os três métodos
-        cores = {"knn": "#FF6B6B", "media": "#4ECDC4", "mediana": "#45B7D1"}
-        palette_colors = [cores.get(m, "#95E1D3") for m in df_plot["metodo"]]
-        
-        # Cria barplot
-        ax_current = ax[i, j]
-        sns.barplot(
-            data=df_plot, 
-            x="metodo", 
-            y="valor",
-            ax=ax_current,
-            palette=palette_colors,
-            errorbar=None
-        )
-        
-        # Define título (apenas na primeira linha para cada métrica)
-        if i == 0:
-            ax_current.set_title(f"{metrica.upper()}", fontsize=12, fontweight="bold")
-        
-        # Define ylabel (apenas na primeira coluna para cada variável)
-        if j == 0:
-            ax_current.set_ylabel(f"{variavel}", fontsize=10, fontweight="bold")
-        else:
-            ax_current.set_ylabel("")
-        
-        # Define xlabel (apenas na última linha)
-        if i == n_variaveis - 1:
-            ax_current.set_xlabel("Método", fontsize=9, fontweight="bold")
-        else:
-            ax_current.set_xlabel("")
-        
-        # Garante que os rótulos do eixo x estão visíveis
-        ax_current.set_xticklabels(df_plot["metodo"].values, rotation=45, ha="right")
-        
-        # Adiciona grid horizontal
-        ax_current.grid(axis="y", alpha=0.3)
-
-# Ajusta layout
-plt.tight_layout()
-
-# Salva a visualização usando a função de utils
-from pcj.utils import salvar_visualizacao
-salvar_visualizacao(
-    fig, 
-    nome_arquivo='validacao',
-    formato="png", 
-    dpi=600
-)
-
-plt.show()
-

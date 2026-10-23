@@ -7,7 +7,7 @@
 #       format_version: '1.3'
 #       jupytext_version: 1.19.5
 #   kernelspec:
-#     display_name: .venv (3.14.2.final.0)
+#     display_name: .venv (3.14.2)
 #     language: python
 #     name: python3
 # ---
@@ -122,3 +122,60 @@ def limpeza(df, metadados=None, variaveis=None, threshold_missing=0.3, salvar_ar
         salvar(df, "dados_limpos")
     
     return df, metadados, variaveis
+
+
+# %% [markdown]
+# # Decomposição Estatísticas
+#
+# Quero decompor os dados em 3: Uma seção "Mínimo", outra seção "Média" e outra "Máximo"
+
+# %% [markdown]
+# eu provavelmente vou precisar escrever uma lógica daquele naipe que aplica linha a linha para criar o os dataframes derivados
+
+# %%
+def decompor_estatisticas(df, estatistica=False):
+    """
+    Decompõe a base de dados em 3, uma para cada estatística:
+    1 base de dados para os valores mínimos de cada mês, 1 para os
+    médios, e 1 para os máximos
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame com todos os valores de todas estatísticas.
+
+    Returns
+    -------
+    df_min : pd.DataFrame
+        DataFrame com valores mínimos
+    df_med : pd.DataFrame
+        DataFrame com valores médios
+    df_max : pd.DataFrame
+        DataFrame com valores máximos
+    """
+    from pcj.utils import dados
+
+    df_completo = df.copy()
+
+    df_min, df_med, df_max = df_completo[df_completo['Estatistica'] == 'Min.'], df_completo[df_completo['Estatistica'] == 'Med.'], df_completo[df_completo['Estatistica'] == 'Max.']
+
+    if estatistica == "min":
+        return df_min
+
+    elif estatistica == "med":
+        return df_med
+
+    elif estatistica == "max":
+        return df_max
+
+    elif estatistica == "min,med":
+        return df_min, df_med
+
+    elif estatistica == "min,max":
+        return df_min, df_max
+
+    elif estatistica == "med,max":
+        return df_med, df_max
+    
+    else:
+        return df_min, df_med, df_max

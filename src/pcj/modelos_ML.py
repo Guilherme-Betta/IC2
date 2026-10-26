@@ -12,59 +12,112 @@
 # # Isolation Forest - Detecção de Anomalias
 
 # %%
-def isolation_forest(df, variaveis=None, valores_contaminacao=None, min=None, max=None, step=None):
+def isolation_forest(
+    df,
+    variaveis=None,
+    contaminacao_inicio=None,
+    contaminacao_fim=None,
+    contaminacao_passo=None,
+    n_seeds=30,
+    limiar=0.5,
+):
+    """
+    Roda o Isolation Forest em grade: cada valor de contaminação × várias seeds.
+    Conta em que fração das rodadas cada linha (mês) foi marcada como anomalia
+    e considera anomalia por consenso a linha marcada em pelo menos `limiar` das rodadas.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame de interesse
+    variaveis : list, optional
+        Lista com nomes das colunas identificadas como variáveis de df, by default None
+    contaminacao_inicio : float, optional
+        Valor mínimo de contaminação a ser testado, by default None
+    contaminacao_fim : float, optional
+        Valor máximo de contaminação (não incluído no intervalo), by default None
+    contaminacao_passo : float, optional
+        Intervalo entre os valores de contaminação, by default None
+    n_seeds : int, optional
+        Número de seeds (random_state de 0 a n_seeds - 1) por contaminação, by default 30
+    limiar : float, optional
+        Fração mínima de rodadas para considerar a linha uma anomalia por consenso, by default 0.5
+
+    Returns
+    -------
+    frequencia : pd.Series
+        Fração das rodadas em que cada linha foi marcada (0 a 1), com o índice de df.
+    consenso : pd.Series of bool
+        True para as linhas com frequencia >= limiar.
+
+    Raises
+    ------
+    ValueError
+        Se o usuário for parametrizar os valores de contaminação,
+        ele deve inserir corretamente um valor mínimo, um máximo,
+        e um passo.
+    """
+    # Bibliotecas
     import numpy as np
-    
+    import pandas as pd
+    from sklearn.ensemble import IsolationForest
+
+    # Separação de variaveis
+    if variaveis is None:
+        from pcj.utils import separar_colunas
+        _, variaveis = separar_colunas(df)
+
+    # Intervalo de valores de contaminação a serem testados
+    intervalo = (
+        contaminacao_inicio,
+        contaminacao_fim,
+        contaminacao_passo,
+    )
+
+    if all(valor is None for valor in intervalo):
+        valores_contaminacao = [0.05, 0.06, 0.07, 0.08, 0.09, 0.10]
+
+    elif any(valor is None for valor in intervalo):
+        raise ValueError(
+            "Para gerar o intervalo, informe início, fim e passo."
+        )
+    else:
+        valores_contaminacao = np.arange(
+            contaminacao_inicio,
+            contaminacao_fim,
+            contaminacao_passo,
+        ).round(10).tolist()
+
+    # Base de dados a ser utilizada
     X = df[variaveis].copy()
 
-    if variaveis is None:
-                from pcj.utils import separar_colunas
-                metadados, variaveis = separar_colunas(df)
+    # Dicionário onde as marcações de cada rodada serão armazenadas
+    # Chave: (contaminação, seed). Valor: True/False para cada linha (True = anomalia)
+    marcacoes = {}
 
-    if valores_contaminacao is None:
-        valores_contaminacao = [0.05, 0.06, 0.07, 0.08, 0.09, 0.1]
+    for contaminacao in valores_contaminacao:
+        for seed in range(n_seeds):
+            modelo = IsolationForest(contamination=contaminacao, random_state=seed)
 
-    else:
-        valores_contaminacao = list(range(min, max, step))
+            # fit_predict treina o modelo e devolve -1 (anomalia) ou 1 (normal) para cada linha.
+            # O corte já é feito pela contaminação: substitui o cálculo manual com np.percentile
+            rotulos = modelo.fit_predict(X)
 
-    resultados = {}
+            marcacoes[(contaminacao, seed)] = rotulos == -1
 
-    from sklearn.ensemble import IsolationForest    
-    for i in valores_contaminacao:
-        isf = IsolationForest(contamination=i).fit(X)
+    # Tabela: uma linha por mês, uma coluna por rodada
+    marcacoes = pd.DataFrame(marcacoes, index=df.index)
 
-        # Faz o fit, retorna valores contínuos para os scores das anomalias. Permite escolher os limites para anomalias.
-        scores = isf.fit(X) 
+    # Média de True/False = fração das rodadas em que a linha foi marcada (True vale 1, False vale 0)
+    frequencia = marcacoes.mean(axis=1)
 
-        scores_samples = scores.score_samples(X)
+    consenso = frequencia >= limiar
 
-        # n_outliers = (scores_samples < -0.5).sum() # Selecionar o threshold adequado para determinar outliers. -0.5 é um placeholder
+    print(f"{len(valores_contaminacao)} contaminações x {n_seeds} seeds = {marcacoes.shape[1]} rodadas")
+    print(f"Linhas marcadas em pelo menos {limiar:.0%} das rodadas: {consenso.sum()}")
 
-        # Esse método é menos arbitrário, e calcula um threshold em função do contamination
-        threshold = np.percentile(scores_samples, 100 * i)  
+    return frequencia, consenso
 
-        # Cria uma máscara para detectar outliers, com base no threshold
-        outlier_mask = scores_samples < threshold   
-
-        # Conta os outliers usando a máscara
-        n_outliers = np.sum(outlier_mask)   
-
-        pct_outliers = (n_outliers / len(X)) * 100
-
-        resultados[i] = {
-            'modelo': isf,
-            # 'scores': scores, # Não sei se encaixa aqui, estou tentando reciclar o código de antes, mas não sei se isso cabe
-            'n_outliers': n_outliers,
-            'pct_outliers': pct_outliers
-        }
-
-        print(f"Contamination {i}: {n_outliers} outliers, {pct_outliers:.1f}%)")
-
-    # Seleção do melhor contamination
-
-    best_contam = max(resultados, key=lambda x: resultados[x]['n_outliers'])    # Definir a lógica correta para identificar qual é o melhor valor
-                                                                                # Nesse caso, ele seleciona o contamination que gera o maior número de outliers.
-    print(f"\n Contamination ideal: {best_contam}")
 
 
 # %% [markdown]
@@ -72,12 +125,26 @@ def isolation_forest(df, variaveis=None, valores_contaminacao=None, min=None, ma
 
 # %%
 def random_forest(df, variaveis=None, var_alvo='pH'):
-    
+    """
+    Roda um algoritmo de classificação com o modelo Random Forest.
+    Testa a acurácia das classificações do modelo com as métricas 
+    de avaliação "MAE", "RMSE" e "R²", e com uma validação cruzada.
+    Imprime esses resultados no final.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame de interesse
+    variaveis : list, optional
+        Lista com nomes das colunas identificadas como variaveis de df, by default None
+    var_alvo : str, optional
+        Variável alvo de classificação, by default 'pH'
+    """    
     X = df.copy()
 
     if variaveis is None:
                 from pcj.utils import separar_colunas
-                metadados, variaveis = separar_colunas(df)
+                _, variaveis = separar_colunas(df)
 
     # Carregar e preparar dados
 
@@ -129,12 +196,25 @@ def random_forest(df, variaveis=None, var_alvo='pH'):
 
 # %%
 def knn_regressor(df, variaveis=None):
+    """
+    Roda um algoritmo de previsão de valores de uma determinada coluna.
+    Roda esse algoritmo para todas as colunas de variáveis da base de dados.
+    Utiliza GridSearchCV para determinar a melhor parametrização do KNN para cada variável.
+    Avalia o desempenho do modelo com as métricas de avaliação "MAE", "RMSE" e "R²".
+    Imprime os resultados de cada métrica, para cada variável no final.
 
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame de interesse
+    variaveis : list, optional
+        Lista com nomes das colunas identificadas como variáveis de df, by default None
+    """
     X = df.dropna().copy()
 
     if variaveis is None:
                 from pcj.utils import separar_colunas
-                metadados, variaveis = separar_colunas(df)
+                _, variaveis = separar_colunas(df)
 
     # 1) Bibliotecas
 
@@ -221,12 +301,45 @@ def knn_regressor(df, variaveis=None):
 
 # %%
 def k_means(df, variaveis=None, n_clusters=10):
-      
+      """
+      Roda o algoritmo de agrupamento K-Means.
+      Roda 3 casos: 
+      1. Dados brutos,
+      2. Dados brutos pós normalização, 
+      3. Dados normalizados pós redução de dimensionalidade PCA.
+      Imprime as matrizes contendo todas as distâncias, rótulos e centros
+      calculados pelo algoritmo em cada caso.
+
+      Parameters
+      ----------
+      df : pd.DataFrame
+          DataFrame de interesse.
+      variaveis : list, optional
+          Lista com nomes das colunas identificadas como variáveis de df, by default None
+      n_clusters : int, optional
+          Define o número máximo de clusters que será testado pelo modelo, by default 10
+
+      Returns
+      -------
+      distancias : list
+          Lista contendo matrizes com todas as distâncias calculadas pelo algoritmo.
+          Uma matriz para cada caso: Dados Brutos, Dados Normalizados, Dados com Redução
+          de Dimensionalidade PCA
+      rotulos : list
+          Lista contendo matrizes com todos os rótulos calculados pelo algoritmo.
+          Uma matriz para cada caso: Dados Brutos, Dados Normalizados, Dados com Redução
+          de Dimensionalidade PCA
+      centros : list
+          Lista contendo matrizes com todos os centros calculados pelo algoritmo.
+          Uma matriz para cada caso: Dados Brutos, Dados Normalizados, Dados com Redução
+          de Dimensionalidade PCA
+
+      """      
       X = df.copy()
 
       if variaveis is None:
             from pcj.utils import separar_colunas
-            metadados, variaveis = separar_colunas(df)
+            _, variaveis = separar_colunas(df)
 
       # Bibliotecas
 

@@ -505,9 +505,26 @@ def correlacao(df, method='pearson', plot=False, salvar=True):
 # # K-Means
 
 # %%
-def k_means_clusters(df, variaveis=False, 
+def k_means_clusters(df, variaveis=None, 
                      n_clusters=10, pca=False, norm=False):
-    
+    """
+    Gera figuras da base de dados, colorida de acordo com os agrupamentos identificados
+    pelo algoritmo K-Means, para cada quantidade de clusters estabelecida.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame de interesse
+    variaveis : list, optional
+        Lista contendo os nomes das colunas identificadas como variaveis de df, by default False
+    n_clusters : int, optional
+         Define o número máximo de clusters que será testado pelo modelo, by default 10
+    pca : bool, optional
+        Se "True", gerará figuras que utilizam os dados pós redução de dimensionalidade PCA, by default False
+    norm : bool, optional
+        Se "True", gerará figuras que utilizam os dados pós normalização dos dados brutos, by default False
+        Se tanto "pca" quanto "norm" forem "False", as figuras usam os dados brutos de df
+    """    
     from sklearn.cluster import KMeans
 
     n_clusters_list = list(range(2, int(n_clusters) + 1))

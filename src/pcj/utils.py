@@ -82,7 +82,7 @@ def dados(caminho_arquivo, original=False):
             DataFrame a ser carregado a partir do arquivo Excel.
         metadados : list
             Lista com os nomes das colunas identificadas como metadados de df.
-        variaveis : lists
+        variaveis : list
             Lista com nomes das colunas identificadas como variáveis de df.
         n_casas_decimais : dict
             Dicionário com o número de casas decimais utilizadas por variável na base de dados original, 

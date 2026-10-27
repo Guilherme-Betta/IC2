@@ -49,7 +49,7 @@ from pcj.utils import salvar
 # #### Z-Score
 
 # %%
-def detect_outliers_zscore(df, variaveis, threshold=3):
+def detect_outliers_zscore(df, variaveis, threshold=3, log=False, verbose=False):
     """
     Gera um quadro de outliers de um DataFrame,
     detectados pelo método Z-Score.
@@ -62,36 +62,80 @@ def detect_outliers_zscore(df, variaveis, threshold=3):
         Lista de variáveis presentes em df.
     threshold : float, default 3
         Valor de Z-Score máximo para um dado não ser considerado um outlier. 
+    log : bool, default False
+        Transforma o formato de distribuição dos dados de forma logarítmica,
+        tornando-a mais simétrica.
+    verbose : bool, default False
+        Rodar a função exibe (print) um texto resumido dos resultados gerais do algoritmo.
 
     Returns
     -------
-    outliers_por_coluna_z : np.ndarray
-        Número de outliers detectados em cada variável.
+    limites_z : pd.DataFrame
+        Uma linha por variável: limites inferior e superior (média ± threshold × desvio
+        padrão, na unidade original) e número de outliers.
     total_outliers_z : int
         Número de linhas com pelo menos um outlier.
-    outliers_zscore : np.ndarray of bool
+    outliers_zscore : pd.DataFrame of bool
         Máscara booleana indicando se cada valor foi classificado como outlier.
+        Índice = df.index (meses); colunas = variaveis.
     """    
+    # Cópia dos dados para preservar o dataframe original
+    df = df.copy()
+
+    # Transforma o formato de distribuição dos dados de forma logarítmica, tornando-a mais simétrica.
+    if log:
+        df[variaveis] = np.log1p(df[variaveis])
+
     # Calcular Z-Scores para todas as colunas numéricas
-    z_scores = zscore(df[variaveis])
-    
+    z_scores = zscore(df[variaveis], nan_policy='omit')     # nan_policy='omit': ignora os NaN no cálculo da média e do desvio padrão.
+                                                            # Sem isso, uma coluna com um único NaN tem todos os z-scores = NaN e 
+                                                            # nenhum outlier é marcado.
+
     # Identificar outliers: |z| > threshold (3 é um threshold comum)
-    outliers_zscore = (np.abs(z_scores) > threshold)
-    
-    # Contar outliers por coluna
-    outliers_por_coluna_z = outliers_zscore.sum(axis=0)
-    
-    # Total de linhas com pelo menos um outlier
+    # DataFrame com os mesmos meses (índice) e variáveis (colunas) de df: mostra ONDE estão os outliers
+    outliers_zscore = pd.DataFrame(np.abs(z_scores) > threshold, index=df.index, columns=variaveis)
+
+    # Dicionário para armazenar os limites e a contagem de outliers de cada variável
+    limites = {}
+
+    for coluna in variaveis:
+        # Mesma média e desvio padrão que o zscore usa (ddof=0; o .std() do pandas usa ddof=1 por padrão)
+        media = df[coluna].mean()
+        desvio = df[coluna].std(ddof=0)
+
+        # Definição dos limites dos dados normais
+        limite_inferior = media - threshold * desvio
+        limite_superior = media + threshold * desvio
+
+        # Converte os limites de volta para a escala original ANTES de guardar no dicionário
+        if log:
+            limite_inferior, limite_superior = np.expm1(limite_inferior), np.expm1(limite_superior)
+
+        limites[coluna] = {
+            "limite_inferior": limite_inferior,
+            "limite_superior": limite_superior,
+            "n_outliers": outliers_zscore[coluna].sum(),   # contagem vem da grade
+        }
+
+    # Conversão do dicionário de resultados num DataFrame
+    limites_z = pd.DataFrame.from_dict(limites, orient="index")
+
+    # Total de linhas com pelo menos um outlier (calculado antes do verbose, que usa esse valor)
     total_outliers_z = outliers_zscore.any(axis=1).sum()
-    
-    return outliers_por_coluna_z, total_outliers_z, outliers_zscore
+
+    if verbose:
+        print(f"Total de outliers (Z-Score, somando todas as colunas): {limites_z['n_outliers'].sum()}")
+        print(f"Total de linhas com pelo menos um outlier (Z-Score): {total_outliers_z}")
+
+    return limites_z, total_outliers_z, outliers_zscore
+
 
 
 # %% [markdown]
 # ##### IQR
 
 # %%
-def detect_outliers_iqr(df, variaveis):
+def detect_outliers_iqr(df, variaveis, log=False, verbose=False):
     """
     Gera um quadro de outliers de um DataFrame,
     detectados pelo método IQR.
@@ -102,41 +146,74 @@ def detect_outliers_iqr(df, variaveis):
         DataFrame a ser analisado.
     variaveis : list
         Lista de variáveis presentes em df.
+    log : bool, default False
+        Transforma o formato de distribuição dos dados de forma logarítmica,
+        tornando-a mais simétrica.
+    verbose : bool, default False
+        Rodar a função exibe (print) um texto resumido dos resultados gerais do algoritmo.
 
     Returns
     -------
-    total_outliers_iqr : int
-        Número total de outliers (somando todas as variáveis).
+    limites_iqr : pd.DataFrame
+        DataFrame contendo os resultados do algoritmo para cada variável.
     total_linhas_outliers_iqr : int
         Número total de linhas com ao menos um outlier.
-    outliers_por_linha_iqr : np.ndarray of bool
-        Máscara booleana por linha (``True`` para linhas com ao menos um outlier).
-    """   
-    print("Outliers detectados por IQR (Tukey):")
-    
-    # Contagem total de outliers
-    total_outliers_iqr = 0
+    outliers_iqr : pd.DataFrame of bool
+        Máscara booleana indicando se cada valor foi classificado como outlier.
+        Índice = df.index (meses); colunas = variaveis.
+    """       
+    # Cópia dos dados para preservar o dataframe original
+    df = df.copy()
 
-    # Contagem de outliers por linha
-    outliers_por_linha_iqr = np.zeros(len(df), dtype=bool)
+    # Transforma o formato de distribuição dos dados de forma logarítmica, tornando-a mais simétrica.
+    if log:
+        df[variaveis] = np.log1p(df[variaveis])
+    
+    # Dicionário para armazenar os resultados do algoritmo
+    limites = {}
+
+    # Máscara: DataFrame com os mesmos meses (índice) e variáveis (colunas) de df: mostra ONDE estão os outliers
+    outliers_iqr = pd.DataFrame(False, index=df.index, columns=variaveis)
     
     for coluna in variaveis:
+        # Definição dos Quartis
         Q1 = df[coluna].quantile(0.25)
         Q3 = df[coluna].quantile(0.75)
+
+        # Definição do Intervalo Interquartil
         IQR = Q3 - Q1
+
+        # Definição dos limites dos dados normais
         limite_inferior = Q1 - 1.5 * IQR
         limite_superior = Q3 + 1.5 * IQR
+
+        # Identificação de Outliers
         outliers = (df[coluna] < limite_inferior) | (df[coluna] > limite_superior)
-        count = outliers.sum()
-        print(f"{coluna}: {count} outliers (limites: {limite_inferior:.3f} a {limite_superior:.3f})")
-        total_outliers_iqr += count
-        outliers_por_linha_iqr |= outliers
+
+        # Converte os limites de volta para a escala original, facilitando a leitura
+        if log:
+            limite_inferior, limite_superior = np.expm1(limite_inferior), np.expm1(limite_superior)
+
+        limites[coluna] = {
+        "limite_inferior": limite_inferior,
+        "limite_superior": limite_superior,
+        "n_outliers": outliers.sum(),
+        }
+
+        # Armazenamento da Posição dos Outliers
+        outliers_iqr[coluna] = outliers
+
+    # Cálculo do total de linhas com outliers
+    total_linhas_outliers_iqr = outliers_iqr.any(axis=1).sum()
+
+    # Conversão do dicionário de resultados num DataFrame
+    limites_iqr = pd.DataFrame.from_dict(limites, orient="index")
+
+    if verbose:
+        print(f"\nTotal de outliers (IQR, somando todas as colunas): {limites_iqr['n_outliers'].sum()}")
+        print(f"Total de linhas com pelo menos um outlier (IQR): {total_linhas_outliers_iqr}")
     
-    total_linhas_outliers_iqr = outliers_por_linha_iqr.sum()
-    print(f"\nTotal de outliers (IQR, somando todas as colunas): {total_outliers_iqr}")
-    print(f"Total de linhas com pelo menos um outlier (IQR): {total_linhas_outliers_iqr}")
-    
-    return total_outliers_iqr, total_linhas_outliers_iqr, outliers_por_linha_iqr
+    return limites_iqr, total_linhas_outliers_iqr, outliers_iqr
 
 
 # %% [markdown]
@@ -282,6 +359,43 @@ def detect_outliers(df, variaveis, methods=None):
     return results
 
 
+# %%
+def resumo_por_mes(df, mascara, coluna_data="Data"):
+    """
+    Resume uma máscara de outliers (meses × variáveis) por mês:
+    lista os meses com pelo menos uma variável marcada, quantas e quais.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame analisado (o mesmo usado para gerar a máscara).
+    mascara : pd.DataFrame of bool
+        Máscara devolvida por detect_outliers_zscore ou detect_outliers_iqr
+        (índice = df.index; colunas = variaveis).
+    coluna_data : str, default "Data"
+        Nome da coluna de df com a data de cada mês.
+
+    Returns
+    -------
+    tabela : pd.DataFrame
+        Uma linha por mês marcado, com a data, o número de variáveis marcadas
+        (n_variaveis) e os nomes delas (variaveis), do mês com mais variáveis
+        para o com menos.
+    """
+    # Um mês entra se pelo menos uma variável estiver marcada
+    meses = mascara.any(axis=1)
+
+    tabela = df.loc[meses, [coluna_data]].assign(
+        # Quantas variáveis foram marcadas naquele mês (True vale 1)
+        n_variaveis=mascara.sum(axis=1)[meses],
+        # Quais variáveis: para cada linha, junta os nomes das colunas que estão True
+        variaveis=mascara[meses].apply(lambda linha: ", ".join(linha.index[linha]), axis=1),
+    )
+
+    return tabela.sort_values("n_variaveis", ascending=False)
+
+
+
 # %% [markdown]
 # # Remoção de Outliers
 
@@ -341,8 +455,8 @@ def remove_outliers_iqr(df, variaveis, salvar_arquivo=True):
     df_clean : pd.DataFrame
         DataFrame com outliers removidos.
     """    
-    _, _, outliers_por_linha_iqr = detect_outliers_iqr(df, variaveis)
-    df_clean = df.loc[~outliers_por_linha_iqr].copy()
+    _, _, outliers_iqr = detect_outliers_iqr(df, variaveis)
+    df_clean = df.loc[~outliers_iqr.any(axis=1)].copy()
     
     if salvar_arquivo:
         salvar(df_clean, "outliers_removed_iqr")

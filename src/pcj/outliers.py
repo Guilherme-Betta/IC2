@@ -16,7 +16,7 @@
 import numpy as np
 import pandas as pd
 from scipy.stats import zscore
-from sklearn.neighbors import LocalOutlierFactor
+from sklearn.neighbors import LocalOutlierFactor, NearestNeighbors
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
 from sklearn.cluster import KMeans
@@ -39,6 +39,7 @@ from pcj.utils import salvar, separar_colunas
 #
 # Métodos Multivariaados Não Supervisionados:
 # - LOF;
+# - KNN (distância ao k-ésimo vizinho);
 # - STRAY;
 # - Distance From The Mean.
 #
@@ -306,6 +307,90 @@ def detect_outliers_lof(df, variaveis=None, n_neighbors=20,
 
 
 # %% [markdown]
+# ##### KNN
+
+# %%
+def detect_outliers_knn(df, variaveis=None, n_neighbors=5,
+                        contaminacoes=(0.05, 0.06, 0.07, 0.08, 0.09, 0.10), limiar=0.5, verbose=False):
+    """
+    Gera um quadro de outliers de um DataFrame,
+    detectados pelo método KNN (distância ao k-ésimo vizinho mais próximo), em grade:
+    para cada valor de contaminação, marca os meses mais distantes dos seus vizinhos
+    e considera outlier por consenso o mês marcado em pelo menos `limiar` das rodadas.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame a ser analisado.
+    variaveis : list, default None
+        Lista de variáveis presentes em df. Se None, usa todas as colunas
+        de df que não são metadados (separar_colunas).
+    n_neighbors : int, default 5
+        Número de vizinhos (k). O score de cada mês é a distância ao k-ésimo
+        vizinho mais próximo (mesmo padrão do KNN da biblioteca PyOD).
+    contaminacoes : tuple of float, default (0.05, 0.06, 0.07, 0.08, 0.09, 0.10)
+        Valores de contaminação testados: em cada rodada, a fração de meses
+        com os maiores scores é marcada como outlier.
+    limiar : float, default 0.5
+        Fração mínima de rodadas para considerar o mês um outlier por consenso.
+    verbose : bool, default False
+        Rodar a função exibe (print) um texto resumido dos resultados gerais do algoritmo.
+
+    Returns
+    -------
+    frequencia : pd.Series of float
+        Fração das rodadas em que cada mês foi marcado (0 a 1). Índice = df.index (meses);
+        NaN nos meses com dado faltante, que o KNN não avalia.
+    consenso : pd.Series of bool
+        True nos meses com frequencia >= limiar. Índice = df.index (meses);
+        os meses não avaliados ficam False.
+    """
+    # Sem lista de variáveis: usa todas as colunas de df que não são metadados
+    if variaveis is None:
+        _, variaveis = separar_colunas(df)
+
+    # O KNN não aceita NaN: só os meses completos são avaliados
+    X_nonan = df[variaveis].dropna(axis=0, how='any')
+    idx_nonan = X_nonan.index
+
+    # O KNN mede distâncias entre meses: sem padronizar, as variáveis de valores grandes dominariam
+    X_scaled = StandardScaler().fit_transform(X_nonan)
+
+    # Pede n_neighbors + 1 vizinhos porque o vizinho mais próximo de cada mês é ele mesmo (distância 0)
+    vizinhos = NearestNeighbors(n_neighbors=n_neighbors + 1).fit(X_scaled)
+    distancias_vizinhos, _ = vizinhos.kneighbors(X_scaled)
+
+    # Score: distância de cada mês ao seu k-ésimo vizinho (a coluna 0 é o próprio mês)
+    score = pd.Series(distancias_vizinhos[:, n_neighbors], index=idx_nonan)
+
+    # Dicionário onde as marcações de cada rodada serão armazenadas
+    # Chave: contaminação. Valor: True/False para cada mês completo (True = outlier)
+    marcacoes = {}
+
+    # O KNN não tem aleatoriedade: o score é calculado uma vez, e só o corte muda a cada contaminação
+    for contaminacao in contaminacoes:
+        # Corte: são marcados os meses com score acima do percentil (1 - contaminação)
+        corte = np.percentile(score, 100 * (1 - contaminacao))
+        marcacoes[contaminacao] = score > corte
+
+    # Tabela: uma linha por mês completo, uma coluna por rodada
+    marcacoes = pd.DataFrame(marcacoes, index=idx_nonan)
+
+    # Média de True/False = fração das rodadas em que o mês foi marcado (True vale 1, False vale 0).
+    # O reindex estende para todos os meses de df: os não avaliados ficam NaN
+    frequencia = marcacoes.mean(axis=1).reindex(df.index)
+
+    # NaN >= limiar dá False: os meses não avaliados não entram no consenso
+    consenso = frequencia >= limiar
+
+    if verbose:
+        print(f"KNN aplicado em {len(idx_nonan)} meses completos ({len(df) - len(idx_nonan)} com NaN, não avaliados)")
+        print(f"{len(contaminacoes)} contaminações; meses marcados em pelo menos {limiar:.0%} das rodadas: {consenso.sum()}")
+
+    return frequencia, consenso
+
+
+# %% [markdown]
 # ##### PCA --> K-Means
 
 # %%
@@ -402,7 +487,7 @@ def detect_outliers(df, variaveis=None, methods=None):
         de df que não são metadados (separar_colunas).
     methods : list of str, default None
         Métodos de detecção a executar. Se ``None``, todos os métodos
-        disponíveis (Z-Score, IQR, LOF, PCA + K-Means) são executados.
+        disponíveis (Z-Score, IQR, LOF, KNN, PCA + K-Means) são executados.
 
     Returns
     -------
@@ -410,7 +495,7 @@ def detect_outliers(df, variaveis=None, methods=None):
         Armazena os resultados do(s) método(s) de detecção utilizados.
     """    
     if methods is None:
-        methods = ['zscore', 'iqr', 'lof', 'pca_kmeans']
+        methods = ['zscore', 'iqr', 'lof', 'knn', 'pca_kmeans']
     
     results = {}
     
@@ -422,6 +507,9 @@ def detect_outliers(df, variaveis=None, methods=None):
     
     if 'lof' in methods:
         results['lof'] = detect_outliers_lof(df, variaveis)
+
+    if 'knn' in methods:
+        results['knn'] = detect_outliers_knn(df, variaveis)
     
     if 'pca_kmeans' in methods:
         results['pca_kmeans'] = detect_outliers_pca_kmeans(df, variaveis)

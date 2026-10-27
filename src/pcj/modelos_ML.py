@@ -15,11 +15,10 @@
 def isolation_forest(
     df,
     variaveis=None,
-    contaminacao_inicio=None,
-    contaminacao_fim=None,
-    contaminacao_passo=None,
+    contaminacoes=(0.05, 0.06, 0.07, 0.08, 0.09, 0.10),
     n_seeds=30,
     limiar=0.5,
+    verbose=False,
 ):
     """
     Roda o Isolation Forest em grade: cada valor de contaminação × várias seeds.
@@ -32,16 +31,14 @@ def isolation_forest(
         DataFrame de interesse
     variaveis : list, optional
         Lista com nomes das colunas identificadas como variáveis de df, by default None
-    contaminacao_inicio : float, optional
-        Valor mínimo de contaminação a ser testado, by default None
-    contaminacao_fim : float, optional
-        Valor máximo de contaminação (não incluído no intervalo), by default None
-    contaminacao_passo : float, optional
-        Intervalo entre os valores de contaminação, by default None
+    contaminacoes : tuple of float, optional
+        Valores de contaminação testados, by default (0.05, 0.06, 0.07, 0.08, 0.09, 0.10)
     n_seeds : int, optional
         Número de seeds (random_state de 0 a n_seeds - 1) por contaminação, by default 30
     limiar : float, optional
         Fração mínima de rodadas para considerar a linha uma anomalia por consenso, by default 0.5
+    verbose : bool, optional
+        Se True, exibe (print) um resumo dos resultados, by default False
 
     Returns
     -------
@@ -49,16 +46,8 @@ def isolation_forest(
         Fração das rodadas em que cada linha foi marcada (0 a 1), com o índice de df.
     consenso : pd.Series of bool
         True para as linhas com frequencia >= limiar.
-
-    Raises
-    ------
-    ValueError
-        Se o usuário for parametrizar os valores de contaminação,
-        ele deve inserir corretamente um valor mínimo, um máximo,
-        e um passo.
     """
     # Bibliotecas
-    import numpy as np
     import pandas as pd
     from sklearn.ensemble import IsolationForest
 
@@ -67,27 +56,6 @@ def isolation_forest(
         from pcj.utils import separar_colunas
         _, variaveis = separar_colunas(df)
 
-    # Intervalo de valores de contaminação a serem testados
-    intervalo = (
-        contaminacao_inicio,
-        contaminacao_fim,
-        contaminacao_passo,
-    )
-
-    if all(valor is None for valor in intervalo):
-        valores_contaminacao = [0.05, 0.06, 0.07, 0.08, 0.09, 0.10]
-
-    elif any(valor is None for valor in intervalo):
-        raise ValueError(
-            "Para gerar o intervalo, informe início, fim e passo."
-        )
-    else:
-        valores_contaminacao = np.arange(
-            contaminacao_inicio,
-            contaminacao_fim,
-            contaminacao_passo,
-        ).round(10).tolist()
-
     # Base de dados a ser utilizada
     X = df[variaveis].copy()
 
@@ -95,7 +63,7 @@ def isolation_forest(
     # Chave: (contaminação, seed). Valor: True/False para cada linha (True = anomalia)
     marcacoes = {}
 
-    for contaminacao in valores_contaminacao:
+    for contaminacao in contaminacoes:
         for seed in range(n_seeds):
             modelo = IsolationForest(contamination=contaminacao, random_state=seed)
 
@@ -113,8 +81,9 @@ def isolation_forest(
 
     consenso = frequencia >= limiar
 
-    print(f"{len(valores_contaminacao)} contaminações x {n_seeds} seeds = {marcacoes.shape[1]} rodadas")
-    print(f"Linhas marcadas em pelo menos {limiar:.0%} das rodadas: {consenso.sum()}")
+    if verbose:
+        print(f"{len(contaminacoes)} contaminações x {n_seeds} seeds = {marcacoes.shape[1]} rodadas")
+        print(f"Linhas marcadas em pelo menos {limiar:.0%} das rodadas: {consenso.sum()}")
 
     return frequencia, consenso
 

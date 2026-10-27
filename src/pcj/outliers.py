@@ -264,7 +264,7 @@ def detect_outliers_lof(df, variaveis, n_neighbors=20, contamination='auto'):
 # ##### PCA --> K-Means
 
 # %%
-def detect_outliers_pca_kmeans(df, variaveis, n_clusters=3, random_state=42):
+def detect_outliers_pca_kmeans(df, variaveis, n_clusters=3, random_state=42, verbose=False):
     """
     Gera um quadro de outliers de um DataFrame,
     usando PCA + K-Means.
@@ -281,6 +281,8 @@ def detect_outliers_pca_kmeans(df, variaveis, n_clusters=3, random_state=42):
     random_state : int, default 42
         Determina o random_state a ser utilizado pelo algoritmo 
         "KMeans" da biblioteca sklearn.
+    verbose : bool, default False
+        Rodar a função exibe (print) um texto resumido dos resultados gerais do algoritmo.
 
     Returns
     -------
@@ -289,8 +291,12 @@ def detect_outliers_pca_kmeans(df, variaveis, n_clusters=3, random_state=42):
     limiar_outlier : float
         Armazena o valor de distância máximo para que
         um dado seja considerado um outlier.
-    distancias : np.ndarray of float
-        Armazena os valores de distâncias.
+    distancias : pd.Series of float
+        Distância de cada mês ao centro do seu cluster. Índice = df.index (meses);
+        NaN nos meses com dado faltante, que o K-Means não avalia.
+    outliers_kmeans : pd.Series of bool
+        True nos meses com distância acima do limiar. Índice = df.index (meses);
+        os meses não avaliados ficam False.
     """    
     X = df[variaveis].copy()
     X_nonan = X.dropna(axis=0, how='any')
@@ -304,16 +310,29 @@ def detect_outliers_pca_kmeans(df, variaveis, n_clusters=3, random_state=42):
     
     kmeans = KMeans(n_clusters=n_clusters, random_state=random_state)
     cluster_labels = kmeans.fit_predict(X_pca)
-    distancias = np.linalg.norm(X_pca - kmeans.cluster_centers_[cluster_labels], axis=1)
+
+    # Distância de cada mês ao centro do seu cluster, rotulada com o índice dos meses completos
+    distancias = pd.Series(index=idx_nonan, data=np.linalg.norm(X_pca - kmeans.cluster_centers_[cluster_labels], axis=1))
     
+    # Limiar calculado ANTES do reindex: com NaN, o np.percentile devolve NaN e nenhum mês seria marcado
     limiar_outlier = np.percentile(distancias, 95)
-    num_outliers = (distancias > limiar_outlier).sum()
+
+    # Estende para todos os meses de df. O reindex devolve uma Series nova (por isso o "distancias =").
+    # Os meses com NaN ficam com distância NaN (não avaliados)
+    distancias = distancias.reindex(df.index)
+
+    # Máscara por mês (uma resposta por mês, não por variável). NaN > limiar dá False,
+    # então os meses não avaliados ficam False
+    outliers_kmeans = distancias > limiar_outlier
+    num_outliers = outliers_kmeans.sum()
+
+    if verbose:
+        print('K-Means aplicado em', len(idx_nonan), 'pontos. Clusters:', np.unique(cluster_labels))
+        print('Número de outliers K-Means (dist > 95%):', num_outliers)
+        print('Limiar de distância:', limiar_outlier)
     
-    print('K-Means aplicado em', len(idx_nonan), 'pontos. Clusters:', np.unique(cluster_labels))
-    print('Número de outliers K-Means (dist > 95%):', num_outliers)
-    print('Limiar de distância:', limiar_outlier)
-    
-    return num_outliers, limiar_outlier, distancias
+    return num_outliers, limiar_outlier, distancias, outliers_kmeans
+
 
 
 # %% [markdown]

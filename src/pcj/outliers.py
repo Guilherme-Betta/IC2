@@ -21,7 +21,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
 from sklearn.cluster import KMeans
 
-from pcj.utils import salvar
+from pcj.utils import salvar, separar_colunas
 
 
 # %% [markdown]
@@ -49,7 +49,7 @@ from pcj.utils import salvar
 # #### Z-Score
 
 # %%
-def detect_outliers_zscore(df, variaveis, threshold=3, log=False, verbose=False):
+def detect_outliers_zscore(df, variaveis=None, threshold=3, log=False, verbose=False):
     """
     Gera um quadro de outliers de um DataFrame,
     detectados pelo método Z-Score.
@@ -58,8 +58,9 @@ def detect_outliers_zscore(df, variaveis, threshold=3, log=False, verbose=False)
     ----------
     df : pd.DataFrame
         DataFrame a ser analisado.
-    variaveis : list
-        Lista de variáveis presentes em df.
+    variaveis : list, default None
+        Lista de variáveis presentes em df. Se None, usa todas as colunas
+        de df que não são metadados (separar_colunas).
     threshold : float, default 3
         Valor de Z-Score máximo para um dado não ser considerado um outlier. 
     log : bool, default False
@@ -79,6 +80,10 @@ def detect_outliers_zscore(df, variaveis, threshold=3, log=False, verbose=False)
         Máscara booleana indicando se cada valor foi classificado como outlier.
         Índice = df.index (meses); colunas = variaveis.
     """    
+    # Sem lista de variáveis: usa todas as colunas de df que não são metadados
+    if variaveis is None:
+        _, variaveis = separar_colunas(df)
+
     # Cópia dos dados para preservar o dataframe original
     df = df.copy()
 
@@ -135,7 +140,7 @@ def detect_outliers_zscore(df, variaveis, threshold=3, log=False, verbose=False)
 # ##### IQR
 
 # %%
-def detect_outliers_iqr(df, variaveis, log=False, verbose=False):
+def detect_outliers_iqr(df, variaveis=None, log=False, verbose=False):
     """
     Gera um quadro de outliers de um DataFrame,
     detectados pelo método IQR.
@@ -144,8 +149,9 @@ def detect_outliers_iqr(df, variaveis, log=False, verbose=False):
     ----------
     df : pd.DataFrame
         DataFrame a ser analisado.
-    variaveis : list
-        Lista de variáveis presentes em df.
+    variaveis : list, default None
+        Lista de variáveis presentes em df. Se None, usa todas as colunas
+        de df que não são metadados (separar_colunas).
     log : bool, default False
         Transforma o formato de distribuição dos dados de forma logarítmica,
         tornando-a mais simétrica.
@@ -162,6 +168,10 @@ def detect_outliers_iqr(df, variaveis, log=False, verbose=False):
         Máscara booleana indicando se cada valor foi classificado como outlier.
         Índice = df.index (meses); colunas = variaveis.
     """       
+    # Sem lista de variáveis: usa todas as colunas de df que não são metadados
+    if variaveis is None:
+        _, variaveis = separar_colunas(df)
+
     # Cópia dos dados para preservar o dataframe original
     df = df.copy()
 
@@ -220,7 +230,7 @@ def detect_outliers_iqr(df, variaveis, log=False, verbose=False):
 # ##### LOF
 
 # %%
-def detect_outliers_lof(df, variaveis, n_neighbors=20, contamination='auto'):
+def detect_outliers_lof(df, variaveis=None, n_neighbors=20, contamination='auto'):
     """
     Gera um quadro de outliers de um DataFrame,
     detectados pelo método LOF.
@@ -229,8 +239,9 @@ def detect_outliers_lof(df, variaveis, n_neighbors=20, contamination='auto'):
     ----------
     df : pd.DataFrame
         DataFrame a ser analisado.
-    variaveis : list
-        Lista de variáveis presentes em df.
+    variaveis : list, default None
+        Lista de variáveis presentes em df. Se None, usa todas as colunas
+        de df que não são metadados (separar_colunas).
     n_neighbors : int, default 20
         Determina o número de vizinhos a serem considerados pelo algoritmo
         "LocalOutlierFactor" da biblioteca sklearn.
@@ -247,6 +258,10 @@ def detect_outliers_lof(df, variaveis, n_neighbors=20, contamination='auto'):
     outlier_scores : np.ndarray of float
         Scores LOF calculados para cada linha de ``df``.
     """    
+    # Sem lista de variáveis: usa todas as colunas de df que não são metadados
+    if variaveis is None:
+        _, variaveis = separar_colunas(df)
+
     lof = LocalOutlierFactor(n_neighbors=n_neighbors, contamination=contamination)
     outlier_labels = lof.fit_predict(df[variaveis])
     outlier_scores = lof.negative_outlier_factor_
@@ -264,7 +279,7 @@ def detect_outliers_lof(df, variaveis, n_neighbors=20, contamination='auto'):
 # ##### PCA --> K-Means
 
 # %%
-def detect_outliers_pca_kmeans(df, variaveis, n_clusters=3, random_state=42, verbose=False):
+def detect_outliers_pca_kmeans(df, variaveis=None, n_clusters=3, random_state=42, verbose=False):
     """
     Gera um quadro de outliers de um DataFrame,
     usando PCA + K-Means.
@@ -273,8 +288,9 @@ def detect_outliers_pca_kmeans(df, variaveis, n_clusters=3, random_state=42, ver
     ----------
     df : pd.DataFrame
         DataFrame a ser analisado.
-    variaveis : list
-        Lista de variáveis presentes em df.
+    variaveis : list, default None
+        Lista de variáveis presentes em df. Se None, usa todas as colunas
+        de df que não são metadados (separar_colunas).
     n_clusters : int, default 3
         Determina o número de clusters a serem utilizados pelo algoritmo 
         "KMeans" da biblioteca sklearn.
@@ -298,6 +314,10 @@ def detect_outliers_pca_kmeans(df, variaveis, n_clusters=3, random_state=42, ver
         True nos meses com distância acima do limiar. Índice = df.index (meses);
         os meses não avaliados ficam False.
     """    
+    # Sem lista de variáveis: usa todas as colunas de df que não são metadados
+    if variaveis is None:
+        _, variaveis = separar_colunas(df)
+
     X = df[variaveis].copy()
     X_nonan = X.dropna(axis=0, how='any')
     idx_nonan = X_nonan.index
@@ -339,7 +359,7 @@ def detect_outliers_pca_kmeans(df, variaveis, n_clusters=3, random_state=42, ver
 # ##### Todos
 
 # %%
-def detect_outliers(df, variaveis, methods=None):
+def detect_outliers(df, variaveis=None, methods=None):
     """
     Executa múltiplos métodos de detecção de outliers.
 
@@ -347,8 +367,9 @@ def detect_outliers(df, variaveis, methods=None):
     ----------
     df : pd.DataFrame
         DataFrame a ser analisado.
-    variaveis : list
-        Lista de variáveis presentes em df.
+    variaveis : list, default None
+        Lista de variáveis presentes em df. Se None, usa todas as colunas
+        de df que não são metadados (separar_colunas).
     methods : list of str, default None
         Métodos de detecção a executar. Se ``None``, todos os métodos
         disponíveis (Z-Score, IQR, LOF, PCA + K-Means) são executados.
@@ -422,7 +443,7 @@ def resumo_por_mes(df, mascara, coluna_data="Data"):
 # ##### Z-Score
 
 # %%
-def remove_outliers_zscore(df, variaveis, threshold=3, salvar_arquivo=True):
+def remove_outliers_zscore(df, variaveis=None, threshold=3, salvar_arquivo=True):
     """
     Remove outliers de acordo com o método Z-Score.
 
@@ -430,8 +451,9 @@ def remove_outliers_zscore(df, variaveis, threshold=3, salvar_arquivo=True):
     ----------
     df : pd.DataFrame
         DataFrame a ser analisado.
-    variaveis : list
-        Lista de variáveis presentes em df.
+    variaveis : list, default None
+        Lista de variáveis presentes em df. Se None, usa todas as colunas
+        de df que não são metadados (separar_colunas).
     threshold : float, default 3
         Valor de Z-Score máximo para um dado não ser considerado um outlier.
     salvar_arquivo : bool, default True
@@ -456,7 +478,7 @@ def remove_outliers_zscore(df, variaveis, threshold=3, salvar_arquivo=True):
 # ##### IQR
 
 # %%
-def remove_outliers_iqr(df, variaveis, salvar_arquivo=True):
+def remove_outliers_iqr(df, variaveis=None, salvar_arquivo=True):
     """
     Remove outliers de acordo com o método IQR (Interquartile Range).
 
@@ -464,8 +486,9 @@ def remove_outliers_iqr(df, variaveis, salvar_arquivo=True):
     ----------
     df : pd.DataFrame
         DataFrame a ser analisado.
-    variaveis : list
-        Lista de variáveis presentes em df.
+    variaveis : list, default None
+        Lista de variáveis presentes em df. Se None, usa todas as colunas
+        de df que não são metadados (separar_colunas).
     salvar_arquivo : bool, default True
         Determina se um arquivo Excel do DataFrame com os outliers removidos deve ser salvo.
 
@@ -487,7 +510,7 @@ def remove_outliers_iqr(df, variaveis, salvar_arquivo=True):
 # ##### LOF
 
 # %%
-def remove_outliers_lof(df, variaveis, n_neighbors=20, contamination='auto', salvar_arquivo=True):
+def remove_outliers_lof(df, variaveis=None, n_neighbors=20, contamination='auto', salvar_arquivo=True):
     """
     Remove outliers de acordo com o método LOF (Local Outlier Factor).
 
@@ -495,8 +518,9 @@ def remove_outliers_lof(df, variaveis, n_neighbors=20, contamination='auto', sal
     ----------
     df : pd.DataFrame
         DataFrame a ser analisado.
-    variaveis : list
-        Lista de variáveis presentes em df.
+    variaveis : list, default None
+        Lista de variáveis presentes em df. Se None, usa todas as colunas
+        de df que não são metadados (separar_colunas).
     n_neighbors : int, default 20
         Determina o número de vizinhos a serem considerados pelo algoritmo
         "LocalOutlierFactor" da biblioteca sklearn.
@@ -524,7 +548,7 @@ def remove_outliers_lof(df, variaveis, n_neighbors=20, contamination='auto', sal
 # ##### Todos
 
 # %%
-def remove_outliers(df, variaveis, method='zscore', salvar_arquivo=True, **kwargs):
+def remove_outliers(df, variaveis=None, method='zscore', salvar_arquivo=True, **kwargs):
     """
     Remove outliers com o método especificado.
     Usa as funções previamente definidas para
@@ -534,8 +558,9 @@ def remove_outliers(df, variaveis, method='zscore', salvar_arquivo=True, **kwarg
     ----------
     df : pd.DataFrame
         DataFrame a ser analisado.
-    variaveis : list
-        Lista de variáveis presentes em df.
+    variaveis : list, default None
+        Lista de variáveis presentes em df. Se None, usa todas as colunas
+        de df que não são metadados (separar_colunas).
     method : str, default 'zscore'
         Determina o método de remoção ('zscore', 'iqr', 'lof')
         de outliers a ser utilizado.

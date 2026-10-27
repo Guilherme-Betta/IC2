@@ -230,10 +230,13 @@ def detect_outliers_iqr(df, variaveis=None, log=False, verbose=False):
 # ##### LOF
 
 # %%
-def detect_outliers_lof(df, variaveis=None, n_neighbors=20, contamination='auto'):
+def detect_outliers_lof(df, variaveis=None, n_neighbors=20,
+                        contaminacoes=(0.05, 0.06, 0.07, 0.08, 0.09, 0.10), limiar=0.5, verbose=False):
     """
     Gera um quadro de outliers de um DataFrame,
-    detectados pelo método LOF.
+    detectados pelo método LOF (Local Outlier Factor), em grade:
+    roda o LOF uma vez para cada valor de contaminação e considera
+    outlier por consenso o mês marcado em pelo menos `limiar` das rodadas.
 
     Parameters
     ----------
@@ -245,34 +248,61 @@ def detect_outliers_lof(df, variaveis=None, n_neighbors=20, contamination='auto'
     n_neighbors : int, default 20
         Determina o número de vizinhos a serem considerados pelo algoritmo
         "LocalOutlierFactor" da biblioteca sklearn.
-    contamination : string, default 'auto'
-        Determina o método de contaminação a ser considerado pelo algoritmo
-        "LocalOutlierFactor" da biblioteca sklearn.
+    contaminacoes : tuple of float, default (0.05, 0.06, 0.07, 0.08, 0.09, 0.10)
+        Valores de contaminação testados (uma rodada do LOF para cada um).
+    limiar : float, default 0.5
+        Fração mínima de rodadas para considerar o mês um outlier por consenso.
+    verbose : bool, default False
+        Rodar a função exibe (print) um texto resumido dos resultados gerais do algoritmo.
 
     Returns
     -------
-    num_outliers : int
-        Armazena o número de outliers em df.
-    outlier_labels : np.ndarray of int
-        Rótulos previstos pelo LOF (``1`` para normal, ``-1`` para outlier).
-    outlier_scores : np.ndarray of float
-        Scores LOF calculados para cada linha de ``df``.
-    """    
+    frequencia : pd.Series of float
+        Fração das rodadas em que cada mês foi marcado (0 a 1). Índice = df.index (meses);
+        NaN nos meses com dado faltante, que o LOF não avalia.
+    consenso : pd.Series of bool
+        True nos meses com frequencia >= limiar. Índice = df.index (meses);
+        os meses não avaliados ficam False.
+    """
     # Sem lista de variáveis: usa todas as colunas de df que não são metadados
     if variaveis is None:
         _, variaveis = separar_colunas(df)
 
-    lof = LocalOutlierFactor(n_neighbors=n_neighbors, contamination=contamination)
-    outlier_labels = lof.fit_predict(df[variaveis])
-    outlier_scores = lof.negative_outlier_factor_
-    
-    num_outliers = (outlier_labels == -1).sum()
-    print(f"Número de outliers detectados pelo LOF: {num_outliers}")
-    print(f"Score LOF mínimo: {outlier_scores.min():.3f}")
-    print(f"Score LOF máximo: {outlier_scores.max():.3f}")
-    print(f"Média dos scores LOF: {outlier_scores.mean():.3f}")
-    
-    return num_outliers, outlier_labels, outlier_scores
+    # O LOF não aceita NaN: só os meses completos são avaliados
+    X_nonan = df[variaveis].dropna(axis=0, how='any')
+    idx_nonan = X_nonan.index
+
+    # O LOF compara distâncias entre meses: sem padronizar, as variáveis de valores grandes dominariam
+    X_scaled = StandardScaler().fit_transform(X_nonan)
+
+    # Dicionário onde as marcações de cada rodada serão armazenadas
+    # Chave: contaminação. Valor: True/False para cada mês completo (True = outlier)
+    marcacoes = {}
+
+    # O LOF não tem aleatoriedade: ao contrário do Isolation Forest, não precisa de várias seeds
+    for contaminacao in contaminacoes:
+        lof = LocalOutlierFactor(n_neighbors=n_neighbors, contamination=contaminacao)
+
+        # fit_predict devolve -1 (outlier) ou 1 (normal) para cada mês
+        rotulos = lof.fit_predict(X_scaled)
+
+        marcacoes[contaminacao] = rotulos == -1
+
+    # Tabela: uma linha por mês completo, uma coluna por rodada
+    marcacoes = pd.DataFrame(marcacoes, index=idx_nonan)
+
+    # Média de True/False = fração das rodadas em que o mês foi marcado (True vale 1, False vale 0).
+    # O reindex estende para todos os meses de df: os não avaliados ficam NaN
+    frequencia = marcacoes.mean(axis=1).reindex(df.index)
+
+    # NaN >= limiar dá False: os meses não avaliados não entram no consenso
+    consenso = frequencia >= limiar
+
+    if verbose:
+        print(f"LOF aplicado em {len(idx_nonan)} meses completos ({len(df) - len(idx_nonan)} com NaN, não avaliados)")
+        print(f"{len(contaminacoes)} contaminações; meses marcados em pelo menos {limiar:.0%} das rodadas: {consenso.sum()}")
+
+    return frequencia, consenso
 
 
 # %% [markdown]
@@ -510,9 +540,11 @@ def remove_outliers_iqr(df, variaveis=None, salvar_arquivo=True):
 # ##### LOF
 
 # %%
-def remove_outliers_lof(df, variaveis=None, n_neighbors=20, contamination='auto', salvar_arquivo=True):
+def remove_outliers_lof(df, variaveis=None, n_neighbors=20,
+                        contaminacoes=(0.05, 0.06, 0.07, 0.08, 0.09, 0.10), limiar=0.5, salvar_arquivo=True):
     """
-    Remove outliers de acordo com o método LOF (Local Outlier Factor).
+    Remove outliers de acordo com o método LOF (Local Outlier Factor),
+    usando o consenso da grade de contaminações (ver detect_outliers_lof).
 
     Parameters
     ----------
@@ -524,23 +556,25 @@ def remove_outliers_lof(df, variaveis=None, n_neighbors=20, contamination='auto'
     n_neighbors : int, default 20
         Determina o número de vizinhos a serem considerados pelo algoritmo
         "LocalOutlierFactor" da biblioteca sklearn.
-    contamination : string, default 'auto'
-        Determina o método de contaminação a ser considerado pelo algoritmo
-        "LocalOutlierFactor" da biblioteca sklearn.
+    contaminacoes : tuple of float, default (0.05, 0.06, 0.07, 0.08, 0.09, 0.10)
+        Valores de contaminação testados (uma rodada do LOF para cada um).
+    limiar : float, default 0.5
+        Fração mínima de rodadas para considerar o mês um outlier por consenso.
     salvar_arquivo : bool, default True
         Determina se um arquivo Excel do DataFrame com os outliers removidos deve ser salvo.
 
     Returns
     -------
     df_clean : pd.DataFrame
-        DataFrame com outliers removidos.
-    """    
-    _, outlier_labels, _ = detect_outliers_lof(df, variaveis, n_neighbors, contamination)
-    df_clean = df.loc[outlier_labels == 1].copy()
-    
+        DataFrame sem os meses marcados por consenso. Os meses com NaN,
+        que o LOF não avalia, são mantidos.
+    """
+    _, consenso = detect_outliers_lof(df, variaveis, n_neighbors, contaminacoes, limiar)
+    df_clean = df.loc[~consenso].copy()
+
     if salvar_arquivo:
         salvar(df_clean, "outliers_removed_lof")
-    
+
     return df_clean
 
 

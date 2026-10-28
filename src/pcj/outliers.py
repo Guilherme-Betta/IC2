@@ -229,6 +229,73 @@ def detect_outliers_iqr(df, variaveis=None, log=False, verbose=False):
 
 
 # %% [markdown]
+# ##### Z-Score e IQR por mês
+
+# %%
+def detect_outliers_estatisticos(df, variaveis=None, log=True, min_variaveis=1, threshold=3,
+                                 coluna_data="Data", verbose=False):
+    """
+    Resume por mês os métodos estatísticos (Z-Score e IQR), no mesmo formato da
+    tabela do ensemble: uma linha por mês e uma coluna True/False por método.
+
+    O Z-Score e o IQR marcam valores (mês × variável): aqui, um mês conta como
+    outlier quando pelo menos `min_variaveis` variáveis foram marcadas nele.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame a ser analisado.
+    variaveis : list, default None
+        Lista de variáveis presentes em df. Se None, usa todas as colunas
+        de df que não são metadados (separar_colunas).
+    log : bool, default True
+        Repassado ao Z-Score e ao IQR: aplica log1p às variáveis antes de calcular os limites.
+    min_variaveis : int, default 1
+        Número mínimo de variáveis marcadas para o método marcar o mês.
+    threshold : float, default 3
+        Repassado ao Z-Score: |z| acima deste valor é outlier.
+    coluna_data : str, default "Data"
+        Nome da coluna de df com a data de cada mês.
+    verbose : bool, default False
+        Rodar a função exibe (print) um texto resumido dos resultados gerais.
+
+    Returns
+    -------
+    tabela : pd.DataFrame
+        Uma linha por mês (índice = df.index), com as colunas: a data;
+        n_var_avaliadas (variáveis com valor no mês, as únicas que o Z-Score e o IQR avaliam);
+        n_var_zscore e n_var_iqr (quantas variáveis cada método marcou no mês);
+        Z-Score e IQR (True = o método marcou o mês).
+    """
+    # Sem lista de variáveis: usa todas as colunas de df que não são metadados
+    if variaveis is None:
+        _, variaveis = separar_colunas(df)
+
+    # Máscaras por valor (meses × variáveis)
+    _, _, mascara_zscore = detect_outliers_zscore(df, variaveis, threshold=threshold, log=log)
+    _, _, mascara_iqr = detect_outliers_iqr(df, variaveis, log=log)
+
+    # Tabela de resultados: começa com a data de cada mês
+    tabela = df[[coluna_data]].copy()
+
+    # Quantas variáveis têm valor no mês, e quantas cada método marcou (True vale 1)
+    tabela["n_var_avaliadas"] = df[variaveis].notna().sum(axis=1)
+    tabela["n_var_zscore"] = mascara_zscore.sum(axis=1)
+    tabela["n_var_iqr"] = mascara_iqr.sum(axis=1)
+
+    # Uma resposta por mês para cada método
+    tabela["Z-Score"] = tabela["n_var_zscore"] >= min_variaveis
+    tabela["IQR"] = tabela["n_var_iqr"] >= min_variaveis
+
+    if verbose:
+        escala = "log" if log else "original"
+        print(f"Z-Score e IQR em escala {escala}; mês marcado com pelo menos {min_variaveis} variável(is)")
+        print(f"Meses marcados: Z-Score {tabela['Z-Score'].sum()}, IQR {tabela['IQR'].sum()}")
+
+    return tabela
+
+
+# %% [markdown]
 # ##### LOF
 
 # %%
@@ -598,6 +665,79 @@ def detect_outliers_ensemble(df, variaveis=None, metodos=("IF", "LOF", "KNN"), r
         print(f"Meses avaliados por um único detector: {(tabela['avaliaram'] == 1).sum()}")
 
     return tabela
+
+
+# %% [markdown]
+# ##### Comparação de marcações
+
+# %%
+def comparar_marcacoes(tabela, referencia="ensemble", metodos=None):
+    """
+    Compara marcações por mês (colunas True/False de uma tabela) com uma
+    marcação de referência: quantos meses cada método marcou, quantos em comum
+    com a referência e o índice de Jaccard.
+
+    Serve para qualquer combinação: métodos × ensemble, detectores × ensemble
+    ou um cenário do ensemble × outro.
+
+    Parameters
+    ----------
+    tabela : pd.DataFrame
+        Uma linha por mês, com colunas True/False (ex.: a tabela de
+        detect_outliers_ensemble, a de detect_outliers_estatisticos ou uma
+        montada com colunas de várias delas).
+    referencia : str, default "ensemble"
+        Coluna de tabela usada como referência.
+    metodos : list of str, default None
+        Colunas de tabela comparadas com a referência. Se None, usa todas as
+        colunas True/False de tabela, menos a referência.
+
+    Returns
+    -------
+    resumo : pd.DataFrame
+        Uma linha por método, com as colunas: marcados (meses que o método marcou),
+        em_comum (marcados pelo método e pela referência), so_no_metodo,
+        so_na_referencia e jaccard (em_comum ÷ meses marcados por pelo menos um
+        dos dois: 1 = marcaram os mesmos meses; 0 = nenhum em comum).
+
+    Raises
+    ------
+    ValueError
+        Se a referência ou algum dos métodos não for uma coluna True/False de tabela.
+    """
+    # Sem lista de métodos: todas as colunas True/False, menos a referência
+    if metodos is None:
+        metodos = [coluna for coluna in tabela.columns if tabela[coluna].dtype == bool and coluna != referencia]
+
+    # Uma coluna que não é True/False (ex.: com NaN depois de juntar tabelas de índices diferentes)
+    # daria contas erradas sem avisar: com ela, o ~ não funciona como "não"
+    for coluna in [referencia] + list(metodos):
+        if coluna not in tabela.columns or tabela[coluna].dtype != bool:
+            raise ValueError(f"{coluna!r} precisa ser uma coluna True/False de tabela.")
+
+    marcacao_referencia = tabela[referencia]
+
+    # Dicionário para armazenar a comparação de cada método com a referência
+    resumo = {}
+
+    for metodo in metodos:
+        marcacao = tabela[metodo]
+
+        # & = "e", | = "ou", ~ = "não", aplicados mês a mês
+        em_comum = (marcacao & marcacao_referencia).sum()
+        algum_dos_dois = (marcacao | marcacao_referencia).sum()
+
+        resumo[metodo] = {
+            "marcados": marcacao.sum(),
+            "em_comum": em_comum,
+            "so_no_metodo": (marcacao & ~marcacao_referencia).sum(),
+            "so_na_referencia": (~marcacao & marcacao_referencia).sum(),
+            # Sem nenhum mês marcado pelos dois, a divisão seria 0 ÷ 0
+            "jaccard": em_comum / algum_dos_dois if algum_dos_dois > 0 else np.nan,
+        }
+
+    # Conversão do dicionário de resultados num DataFrame
+    return pd.DataFrame.from_dict(resumo, orient="index")
 
 
 # %% [markdown]

@@ -48,7 +48,7 @@ def evaluate_regressor(model, X_test, y_test, feature_names=None, target_name=No
 # # Preparação para cálculos das métricas
 
 # %%
-def preparar_para_metricas(df_verdadeiro, df_predito, metadados):
+def preparar_para_metricas(df_verdadeiro, df_predito, metadados, verbose=False):
     """
     Prepara dois DataFrames para cálculo de métricas.
     
@@ -62,6 +62,8 @@ def preparar_para_metricas(df_verdadeiro, df_predito, metadados):
         DataFrame com valores preditos/imputados.
     metadados : list
         Lista de colunas de metadados a ignorar.
+    verbose : bool, default False
+        Se True, exibe (print) as colunas usadas nas métricas.
     
     Returns
     -------
@@ -92,8 +94,9 @@ def preparar_para_metricas(df_verdadeiro, df_predito, metadados):
     colunas_usadas = list(df_verdadeiro_prep.columns)
     df_predito_prep = df_predito_prep[colunas_usadas]
     
-    print(f"Colunas usadas para métricas: {colunas_usadas}")
-    print(f"Total de colunas: {len(colunas_usadas)}")
+    if verbose:
+        print(f"Colunas usadas para métricas: {colunas_usadas}")
+        print(f"Total de colunas: {len(colunas_usadas)}")
     
     return df_verdadeiro_prep, df_predito_prep, colunas_usadas
 
@@ -102,7 +105,7 @@ def preparar_para_metricas(df_verdadeiro, df_predito, metadados):
 # # Introdução artificial de NaN
 
 # %%
-def simular_dados_faltantes(df, pct_remover=0.05, seed=42):
+def simular_dados_faltantes(df, pct_remover=0.05, seed=42, verbose=False):
     """
     Versão simplificada: cria dataset com NaN simulado.
     
@@ -114,6 +117,8 @@ def simular_dados_faltantes(df, pct_remover=0.05, seed=42):
         Percentual de valores a remover (ex: 0.05 para 5%).
     seed : int
         Seed para reprodutibilidade.
+    verbose : bool, default False
+        Se True, exibe (print) quantas colunas receberam NaN e a porcentagem removida.
     
     Returns
     -------
@@ -148,7 +153,8 @@ def simular_dados_faltantes(df, pct_remover=0.05, seed=42):
         df_sim.loc[indices, col] = np.nan
         mascara.loc[indices, col] = True
     
-    print(f"{len(todas_cols)} colunas, {pct_remover*100}% removido")
+    if verbose:
+        print(f"{len(todas_cols)} colunas, {pct_remover*100}% removido")
 
     return df_sim, mascara
 
@@ -168,7 +174,7 @@ def simular_dados_faltantes(df, pct_remover=0.05, seed=42):
 
 # %%
 def avaliar_imputacao(df_verdadeiro, df_imputado, mascara,
-                        metodo, pct_faltantes=None):
+                        metodo, pct_faltantes=None, verbose=False):
     """
     Interface simples para avaliar qualidade de imputação.
     
@@ -190,6 +196,8 @@ def avaliar_imputacao(df_verdadeiro, df_imputado, mascara,
     pct_faltantes : float, optional
         Porcentagem de dados faltantes (ex: 0.05 para 5%).
         Padrão: None
+    verbose : bool, default False
+        Se True, exibe (print) as colunas usadas nas métricas.
     
     Returns
     -------
@@ -209,7 +217,7 @@ def avaliar_imputacao(df_verdadeiro, df_imputado, mascara,
     
     # Preparar dados
     df_verd_prep, df_imput_prep, colunas = preparar_para_metricas(
-        df_verdadeiro, df_imputado, metadados
+        df_verdadeiro, df_imputado, metadados, verbose=verbose
     )
     
     # Alinhar máscara ao mesmo índice e colunas usadas na métrica

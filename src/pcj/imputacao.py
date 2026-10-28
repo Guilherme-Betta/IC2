@@ -188,7 +188,8 @@ def median_imput(df, max_missing=0.05,
 
 # %%
 def knn_imput(df, min_missing=0.05, max_missing=0.3, 
-              return_reduced=False, save_missing_pct=False, salvar_arquivo=False):
+              return_reduced=False, save_missing_pct=False, salvar_arquivo=False,
+              verbose=False):
     """
     Faz a imputação dos dados faltantes via KNN (método do sklearn).
 
@@ -207,6 +208,8 @@ def knn_imput(df, min_missing=0.05, max_missing=0.3,
         de cada coluna imputada.
     salvar_arquivo : bool, default False
         Determina se um arquivo Excel com o DataFrame pós imputação deve ser gerado.
+    verbose : bool, default False
+        Se True, exibe (print) quantos valores faltantes restaram em cada coluna imputada.
 
     Returns
     -------
@@ -234,8 +237,9 @@ def knn_imput(df, min_missing=0.05, max_missing=0.3,
     df[cols] = imputer.fit_transform(X)
 
     # Verifica se ainda há valores faltantes nas colunas imputadas
-    print("Valores faltantes após imputação KNN:")
-    print(df[cols].isna().sum())
+    if verbose:
+        print("Valores faltantes após imputação KNN:")
+        print(df[cols].isna().sum())
 
     # Retorna um DataFrame sem as variáveis que não passaram pela imputação
     if return_reduced:

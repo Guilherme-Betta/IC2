@@ -75,7 +75,7 @@ def prep_brutos(df, salvar_arquivo=True):
 # %%
 def limpeza(df, metadados=None, variaveis=None, threshold_missing=0.3, salvar_arquivo=True):
     """
-    Remove dados corrompidos e colunas com muitos dados faltantes.
+    Remove dados corrompidos, linhas sem nenhum valor e colunas com muitos dados faltantes.
 
     Parameters
     ----------
@@ -110,6 +110,10 @@ def limpeza(df, metadados=None, variaveis=None, threshold_missing=0.3, salvar_ar
     # Converte colunas variáveis para numeric, coerce non-numeric to NaN
     for coluna in variaveis:
         df[coluna] = pd.to_numeric(df[coluna], errors='coerce')
+    
+    # Remove as linhas sem nenhum valor nas variáveis (ex.: 2024-12, vazio no PDF do SEMAE).
+    # Vem antes do corte de colunas: as linhas vazias contariam como faltantes em todas as colunas
+    df = df.dropna(axis=0, how='all', subset=variaveis)
     
     # Remove colunas com dados faltantes acima do threshold
     thresh_count = len(df) * (1 - threshold_missing)

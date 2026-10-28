@@ -252,29 +252,31 @@ def avaliar_imputacao(df_verdadeiro, df_imputado, mascara,
 
 
 # %%
-def avaliacao_completa(df, seed=42):
+def avaliacao_completa(df, n_seeds=30):
     """
     Orquestra a avaliação completa de todos os métodos de imputação.
     
     Executa um pipeline completo que simula dados faltantes, aplica os três
     métodos de imputação (média, mediana, KNN), e calcula
     as métricas de desempenho para cada combinação.
+    Repete tudo n_seeds vezes: em cada rodada, a seed sorteia outras células para remover.
     
     Parameters
     ----------
     df : pd.DataFrame
-        DataFrame completo (sem NaN) a ser usado como referência.
-    seed : int, default 42
-        Seed para reprodutibilidade dos dados simulados.
+        DataFrame de interesse. As linhas com NaN são descartadas; as linhas completas
+        que sobram são a referência (valores verdadeiros).
+    n_seeds : int, default 30
+        Número de rodadas. As seeds vão de 0 a n_seeds - 1.
     
     Returns
     -------
     tabela_completa : pd.DataFrame
-        DataFrame consolidado contendo métricas de todas as combinações:
+        DataFrame consolidado, com uma linha por seed × método × variável:
         - média e mediana: 5% de dados removidos;
-        - KNN: 15% de dados removidos.
+        - KNN: 30% de dados removidos.
         
-        Colunas incluem: variavel, rmse, mae, r2, n_celulas, metodo, pct_faltantes.
+        Colunas incluem: variavel, rmse, mae, r2, n_celulas, metodo, pct_faltantes, seed.
     
     Notes
     -----
@@ -289,30 +291,34 @@ def avaliacao_completa(df, seed=42):
 
     partes = []
 
-    # Para média e mediana
-    sim, mascara = simular_dados_faltantes(
-        df, pct_remover=0.05, seed=seed
-    )
+    # Cada seed sorteia outras células para remover. Repetir aumenta a amostra:
+    # com 5% de remoção, cada rodada avalia poucas células por variável
+    for seed in range(n_seeds):
 
-    metodos = [("media", mean_imput), ("mediana", median_imput)]
-
-    for nome, func in metodos:
-        imputado = func(sim, return_reduced=True)
-        partes.append(
-            avaliar_imputacao(ref, imputado, mascara, metodo=nome, pct_faltantes=0.05)
+        # Para média e mediana
+        sim, mascara = simular_dados_faltantes(
+            df, pct_remover=0.05, seed=seed
         )
 
-    # Para KNN (mesmo loop de antes, só que com ajustes para acomodar o KNN)
-    sim, mascara = simular_dados_faltantes(
-        df, pct_remover=0.3, seed=seed
-    )
+        metodos = [("media", mean_imput), ("mediana", median_imput)]
 
-    metodos = [("knn", knn_imput)]
+        for nome, func in metodos:
+            imputado = func(sim, return_reduced=True)
+            resultado = avaliar_imputacao(ref, imputado, mascara, metodo=nome, pct_faltantes=0.05)
+            resultado["seed"] = seed    # Identifica a rodada na tabela final
+            partes.append(resultado)
 
-    for nome, func in metodos:
-        imputado = func(sim, return_reduced=True)
-        partes.append(
-            avaliar_imputacao(ref, imputado, mascara, metodo=nome, pct_faltantes=0.3)
+        # Para KNN (mesmo loop de antes, só que com ajustes para acomodar o KNN)
+        sim, mascara = simular_dados_faltantes(
+            df, pct_remover=0.3, seed=seed
         )
+
+        metodos = [("knn", knn_imput)]
+
+        for nome, func in metodos:
+            imputado = func(sim, return_reduced=True)
+            resultado = avaliar_imputacao(ref, imputado, mascara, metodo=nome, pct_faltantes=0.3)
+            resultado["seed"] = seed
+            partes.append(resultado)
     
     return pd.concat(partes, ignore_index=True)

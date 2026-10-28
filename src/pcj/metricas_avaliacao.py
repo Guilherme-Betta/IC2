@@ -80,8 +80,9 @@ def preparar_para_metricas(df_verdadeiro, df_predito, metadados, verbose=False):
     # Remove linhas com NaN
     df_verdadeiro = df_verdadeiro.dropna().copy()
     
-    # Encontra colunas comuns (intersecção)
-    colunas_comuns = set(df_verdadeiro.columns) & set(df_predito.columns)
+    # Encontra colunas comuns (intersecção), na ordem das colunas de df_verdadeiro.
+    # Não usa set: a ordem de um set muda a cada execução do Python, e as tabelas de resultado mudariam de ordem
+    colunas_comuns = [col for col in df_verdadeiro.columns if col in df_predito.columns]
     
     # Remove metadados. Importante, pois os cálculos de métricas só funcionam em colunas numéricas.
     # Exemplo: Nas colunas de datas (dtype=datetime), os métodos sklearn retornam TypeError
@@ -174,7 +175,7 @@ def simular_dados_faltantes(df, pct_remover=0.05, seed=42, verbose=False):
 
 # %%
 def avaliar_imputacao(df_verdadeiro, df_imputado, mascara,
-                        metodo, pct_faltantes=None, verbose=False):
+                        metodo, pct_faltantes=None, verbose=False, devolver_celulas=False):
     """
     Interface simples para avaliar qualidade de imputação.
     
@@ -198,6 +199,8 @@ def avaliar_imputacao(df_verdadeiro, df_imputado, mascara,
         Padrão: None
     verbose : bool, default False
         Se True, exibe (print) as colunas usadas nas métricas.
+    devolver_celulas : bool, default False
+        Se True, devolve também a tabela de células (valor verdadeiro e imputado de cada célula).
     
     Returns
     -------
@@ -210,6 +213,9 @@ def avaliar_imputacao(df_verdadeiro, df_imputado, mascara,
         - n_celulas: número de células avaliadas
         - metodo: método de imputação
         - pct_faltantes: percentual de dados faltantes
+    celulas : pd.DataFrame, optional
+        Apenas se devolver_celulas=True. Uma linha por célula avaliada, com as colunas
+        variavel, indice (rótulo da linha no DataFrame), verdadeiro, imputado, metodo e pct_faltantes.
     """
     
     from pcj.utils import separar_colunas
@@ -226,6 +232,9 @@ def avaliar_imputacao(df_verdadeiro, df_imputado, mascara,
     # Cria uma lista que será convertida em DataFrame, com todas as métricas de todas as variáveis
 
     linhas = []
+
+    # Lista de tabelas de células (uma por variável), usada só se devolver_celulas=True
+    celulas = []
 
     from sklearn.metrics import mean_absolute_error, root_mean_squared_error, r2_score
 
@@ -246,13 +255,34 @@ def avaliar_imputacao(df_verdadeiro, df_imputado, mascara,
             "metodo": metodo,
             "pct_faltantes": pct_faltantes
         })
+
+        # Guarda as células desta variável, para calcular as métricas juntando várias rodadas
+        if devolver_celulas:
+            celulas.append(pd.DataFrame({
+                "variavel": col,
+                "indice": y_true.index,
+                "verdadeiro": y_true.values,
+                "imputado": y_pred.values,
+                "metodo": metodo,
+                "pct_faltantes": pct_faltantes
+            }))
     
     # Converte a lista "linhas" para DataFrame
-    return pd.DataFrame(linhas)
+    resultado = pd.DataFrame(linhas)
+
+    if devolver_celulas:
+        # pd.concat não aceita uma lista vazia: sem células avaliadas, devolve uma tabela vazia
+        if celulas:
+            celulas = pd.concat(celulas, ignore_index=True)
+        else:
+            celulas = pd.DataFrame()
+        return resultado, celulas
+
+    return resultado
 
 
 # %%
-def avaliacao_completa(df, n_seeds=30):
+def avaliacao_completa(df, n_seeds=30, devolver_celulas=False):
     """
     Orquestra a avaliação completa de todos os métodos de imputação.
     
@@ -268,6 +298,9 @@ def avaliacao_completa(df, n_seeds=30):
         que sobram são a referência (valores verdadeiros).
     n_seeds : int, default 30
         Número de rodadas. As seeds vão de 0 a n_seeds - 1.
+    devolver_celulas : bool, default False
+        Se True, devolve também a tabela de células de todas as rodadas,
+        para calcular as métricas juntando as rodadas (função metricas_juntando).
     
     Returns
     -------
@@ -277,6 +310,9 @@ def avaliacao_completa(df, n_seeds=30):
         - KNN: 30% de dados removidos.
         
         Colunas incluem: variavel, rmse, mae, r2, n_celulas, metodo, pct_faltantes, seed.
+    celulas : pd.DataFrame, optional
+        Apenas se devolver_celulas=True. Uma linha por célula avaliada em cada rodada:
+        variavel, indice, verdadeiro, imputado, metodo, pct_faltantes, seed.
     
     Notes
     -----
@@ -290,6 +326,7 @@ def avaliacao_completa(df, n_seeds=30):
     ref = df.dropna().copy()
 
     partes = []
+    celulas = []
 
     # Cada seed sorteia outras células para remover. Repetir aumenta a amostra:
     # com 5% de remoção, cada rodada avalia poucas células por variável
@@ -304,9 +341,12 @@ def avaliacao_completa(df, n_seeds=30):
 
         for nome, func in metodos:
             imputado = func(sim, return_reduced=True)
-            resultado = avaliar_imputacao(ref, imputado, mascara, metodo=nome, pct_faltantes=0.05)
+            resultado, cel = avaliar_imputacao(ref, imputado, mascara, metodo=nome, pct_faltantes=0.05,
+                                               devolver_celulas=True)
             resultado["seed"] = seed    # Identifica a rodada na tabela final
+            cel["seed"] = seed
             partes.append(resultado)
+            celulas.append(cel)
 
         # Para KNN (mesmo loop de antes, só que com ajustes para acomodar o KNN)
         sim, mascara = simular_dados_faltantes(
@@ -317,8 +357,60 @@ def avaliacao_completa(df, n_seeds=30):
 
         for nome, func in metodos:
             imputado = func(sim, return_reduced=True)
-            resultado = avaliar_imputacao(ref, imputado, mascara, metodo=nome, pct_faltantes=0.3)
+            resultado, cel = avaliar_imputacao(ref, imputado, mascara, metodo=nome, pct_faltantes=0.3,
+                                               devolver_celulas=True)
             resultado["seed"] = seed
+            cel["seed"] = seed
             partes.append(resultado)
+            celulas.append(cel)
     
-    return pd.concat(partes, ignore_index=True)
+    tabela_completa = pd.concat(partes, ignore_index=True)
+
+    if devolver_celulas:
+        return tabela_completa, pd.concat(celulas, ignore_index=True)
+
+    return tabela_completa
+
+
+# %%
+def metricas_juntando(celulas):
+    """
+    Calcula RMSE, MAE e R² juntando as células de todas as rodadas (seeds).
+    
+    Em vez de calcular uma métrica por rodada e tirar a média, junta todas as células
+    de um método e de uma variável e calcula cada métrica uma vez só. Com poucas células
+    por rodada, o R² de uma rodada oscila muito; juntando, ele fica estável.
+    
+    Parameters
+    ----------
+    celulas : pd.DataFrame
+        Tabela de células devolvida por avaliacao_completa(..., devolver_celulas=True),
+        com as colunas variavel, verdadeiro, imputado, metodo, pct_faltantes e seed.
+    
+    Returns
+    -------
+    resultado : pd.DataFrame
+        Uma linha por método × variável, com as colunas variavel, rmse, mae, r2,
+        n_celulas (total de células juntadas), n_seeds, metodo e pct_faltantes.
+    """
+    from sklearn.metrics import mean_absolute_error, root_mean_squared_error, r2_score
+
+    linhas = []
+
+    # Cada grupo = todas as células de um método e de uma variável, de todas as rodadas
+    for (metodo, variavel), grupo in celulas.groupby(["metodo", "variavel"], sort=False):
+        y_true = grupo["verdadeiro"]
+        y_pred = grupo["imputado"]
+
+        linhas.append({
+            "variavel": variavel,
+            "rmse": root_mean_squared_error(y_true, y_pred),
+            "mae": mean_absolute_error(y_true, y_pred),
+            "r2": r2_score(y_true, y_pred),
+            "n_celulas": len(grupo),
+            "n_seeds": grupo["seed"].nunique(),
+            "metodo": metodo,
+            "pct_faltantes": grupo["pct_faltantes"].iloc[0]
+        })
+
+    return pd.DataFrame(linhas)

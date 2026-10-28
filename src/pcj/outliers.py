@@ -22,6 +22,7 @@ from sklearn.decomposition import PCA
 from sklearn.cluster import KMeans
 
 from pcj.utils import salvar, separar_colunas
+from pcj.modelos_ML import isolation_forest
 
 
 # %% [markdown]
@@ -394,10 +395,15 @@ def detect_outliers_knn(df, variaveis=None, n_neighbors=5,
 # ##### PCA --> K-Means
 
 # %%
-def detect_outliers_pca_kmeans(df, variaveis=None, n_clusters=3, random_state=42, verbose=False):
+def detect_outliers_pca_kmeans(df, variaveis=None, n_clusters=3,
+                               contaminacoes=(0.05, 0.06, 0.07, 0.08, 0.09, 0.10), n_seeds=30,
+                               limiar=0.5, verbose=False):
     """
     Gera um quadro de outliers de um DataFrame,
-    usando PCA + K-Means.
+    usando PCA + K-Means em grade: para cada seed, agrupa os meses (K-Means sobre os
+    componentes principais) e mede a distância de cada mês ao centro do seu grupo;
+    para cada valor de contaminação, marca os meses mais distantes. É outlier por
+    consenso o mês marcado em pelo menos `limiar` das rodadas.
 
     Parameters
     ----------
@@ -407,67 +413,191 @@ def detect_outliers_pca_kmeans(df, variaveis=None, n_clusters=3, random_state=42
         Lista de variáveis presentes em df. Se None, usa todas as colunas
         de df que não são metadados (separar_colunas).
     n_clusters : int, default 3
-        Determina o número de clusters a serem utilizados pelo algoritmo 
+        Determina o número de clusters a serem utilizados pelo algoritmo
         "KMeans" da biblioteca sklearn.
-    random_state : int, default 42
-        Determina o random_state a ser utilizado pelo algoritmo 
-        "KMeans" da biblioteca sklearn.
+    contaminacoes : tuple of float, default (0.05, 0.06, 0.07, 0.08, 0.09, 0.10)
+        Valores de contaminação testados: em cada rodada, a fração de meses
+        mais distantes do centro do seu grupo é marcada como outlier.
+    n_seeds : int, default 30
+        Número de seeds do K-Means (random_state de 0 a n_seeds - 1): a posição
+        inicial dos centros é aleatória e pode mudar os grupos.
+    limiar : float, default 0.5
+        Fração mínima de rodadas para considerar o mês um outlier por consenso.
     verbose : bool, default False
         Rodar a função exibe (print) um texto resumido dos resultados gerais do algoritmo.
 
     Returns
     -------
-    num_outliers : int
-        Armazena o número de outliers identificados em df.
-    limiar_outlier : float
-        Armazena o valor de distância máximo para que
-        um dado seja considerado um outlier.
-    distancias : pd.Series of float
-        Distância de cada mês ao centro do seu cluster. Índice = df.index (meses);
+    frequencia : pd.Series of float
+        Fração das rodadas em que cada mês foi marcado (0 a 1). Índice = df.index (meses);
         NaN nos meses com dado faltante, que o K-Means não avalia.
-    outliers_kmeans : pd.Series of bool
-        True nos meses com distância acima do limiar. Índice = df.index (meses);
+    consenso : pd.Series of bool
+        True nos meses com frequencia >= limiar. Índice = df.index (meses);
         os meses não avaliados ficam False.
-    """    
+    """
     # Sem lista de variáveis: usa todas as colunas de df que não são metadados
     if variaveis is None:
         _, variaveis = separar_colunas(df)
 
-    X = df[variaveis].copy()
-    X_nonan = X.dropna(axis=0, how='any')
+    # O PCA e o K-Means não aceitam NaN: só os meses completos são avaliados
+    X_nonan = df[variaveis].dropna(axis=0, how='any')
     idx_nonan = X_nonan.index
-    
-    scaler = StandardScaler()
-    X_scaled = scaler.fit_transform(X_nonan)
-    
-    pca = PCA(n_components=0.95, random_state=random_state)
-    X_pca = pca.fit_transform(X_scaled)
-    
-    kmeans = KMeans(n_clusters=n_clusters, random_state=random_state)
-    cluster_labels = kmeans.fit_predict(X_pca)
 
-    # Distância de cada mês ao centro do seu cluster, rotulada com o índice dos meses completos
-    distancias = pd.Series(index=idx_nonan, data=np.linalg.norm(X_pca - kmeans.cluster_centers_[cluster_labels], axis=1))
-    
-    # Limiar calculado ANTES do reindex: com NaN, o np.percentile devolve NaN e nenhum mês seria marcado
-    limiar_outlier = np.percentile(distancias, 95)
+    # Padronização: sem ela, as variáveis de valores grandes dominariam as distâncias
+    X_scaled = StandardScaler().fit_transform(X_nonan)
 
-    # Estende para todos os meses de df. O reindex devolve uma Series nova (por isso o "distancias =").
-    # Os meses com NaN ficam com distância NaN (não avaliados)
-    distancias = distancias.reindex(df.index)
+    # Componentes principais que explicam 95% da variância.
+    # O PCA não depende de seed aqui: é calculado uma vez, fora do laço
+    X_pca = PCA(n_components=0.95).fit_transform(X_scaled)
 
-    # Máscara por mês (uma resposta por mês, não por variável). NaN > limiar dá False,
-    # então os meses não avaliados ficam False
-    outliers_kmeans = distancias > limiar_outlier
-    num_outliers = outliers_kmeans.sum()
+    # Dicionário onde as marcações de cada rodada serão armazenadas
+    # Chave: (contaminação, seed). Valor: True/False para cada mês completo (True = outlier)
+    marcacoes = {}
+
+    for seed in range(n_seeds):
+        # Os grupos dependem só da seed: o K-Means roda uma vez por seed, e só o corte muda a cada contaminação
+        kmeans = KMeans(n_clusters=n_clusters, random_state=seed)
+        grupos = kmeans.fit_predict(X_pca)
+
+        # Distância de cada mês ao centro do seu grupo
+        distancias = np.linalg.norm(X_pca - kmeans.cluster_centers_[grupos], axis=1)
+
+        for contaminacao in contaminacoes:
+            # Corte: são marcados os meses com distância acima do percentil (1 - contaminação)
+            corte = np.percentile(distancias, 100 * (1 - contaminacao))
+            marcacoes[(contaminacao, seed)] = distancias > corte
+
+    # Tabela: uma linha por mês completo, uma coluna por rodada
+    marcacoes = pd.DataFrame(marcacoes, index=idx_nonan)
+
+    # Média de True/False = fração das rodadas em que o mês foi marcado (True vale 1, False vale 0).
+    # O reindex estende para todos os meses de df: os não avaliados ficam NaN
+    frequencia = marcacoes.mean(axis=1).reindex(df.index)
+
+    # NaN >= limiar dá False: os meses não avaliados não entram no consenso
+    consenso = frequencia >= limiar
 
     if verbose:
-        print('K-Means aplicado em', len(idx_nonan), 'pontos. Clusters:', np.unique(cluster_labels))
-        print('Número de outliers K-Means (dist > 95%):', num_outliers)
-        print('Limiar de distância:', limiar_outlier)
-    
-    return num_outliers, limiar_outlier, distancias, outliers_kmeans
+        print(f"PCA + K-Means aplicado em {len(idx_nonan)} meses completos ({len(df) - len(idx_nonan)} com NaN, "
+              f"não avaliados); {X_pca.shape[1]} componentes principais")
+        print(f"{len(contaminacoes)} contaminações x {n_seeds} seeds = {marcacoes.shape[1]} rodadas; "
+              f"meses marcados em pelo menos {limiar:.0%} das rodadas: {consenso.sum()}")
 
+    return frequencia, consenso
+
+
+
+# %% [markdown]
+# ##### Ensemble (IF + LOF + KNN; K-Means opcional)
+
+# %%
+def detect_outliers_ensemble(df, variaveis=None, metodos=("IF", "LOF", "KNN"), regra="maioria",
+                             contaminacoes=(0.05, 0.06, 0.07, 0.08, 0.09, 0.10), limiar=0.5, n_seeds=30,
+                             limiar_media=0.5, coluna_data="Data", verbose=False):
+    """
+    Combina detectores de outliers de aprendizado de máquina (Isolation Forest,
+    LOF, KNN e, como opção, PCA + K-Means) num ensemble. Cada detector vota com o
+    seu consenso (ver pcj.modelos_ML.isolation_forest, detect_outliers_lof,
+    detect_outliers_knn e detect_outliers_pca_kmeans), e a regra de votação é
+    aplicada só entre os detectores que avaliaram o mês (o LOF, o KNN e o K-Means
+    não avaliam os meses com NaN).
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame a ser analisado.
+    variaveis : list, default None
+        Lista de variáveis presentes em df. Se None, usa todas as colunas
+        de df que não são metadados (separar_colunas).
+    metodos : tuple of str, default ("IF", "LOF", "KNN")
+        Detectores que votam no ensemble: "IF", "LOF", "KNN" e, fora do padrão,
+        "K-Means" (PCA + K-Means).
+    regra : str, default "maioria"
+        Como os votos viram a marcação do ensemble:
+        "maioria": mais da metade dos detectores que avaliaram o mês
+        (com número par de detectores, o empate não marca);
+        "unanimidade": todos os detectores que avaliaram o mês;
+        "qualquer": pelo menos um detector;
+        "media": média das frequências dos detectores (voto suave) >= limiar_media.
+    contaminacoes : tuple of float, default (0.05, 0.06, 0.07, 0.08, 0.09, 0.10)
+        Valores de contaminação repassados aos detectores.
+    limiar : float, default 0.5
+        Limiar de consenso de cada detector (fração mínima de rodadas).
+    n_seeds : int, default 30
+        Número de seeds do Isolation Forest e do K-Means.
+    limiar_media : float, default 0.5
+        Só para regra="media": média mínima das frequências para marcar o mês.
+    coluna_data : str, default "Data"
+        Nome da coluna de df com a data de cada mês.
+    verbose : bool, default False
+        Rodar a função exibe (print) um texto resumido dos resultados gerais do algoritmo.
+
+    Returns
+    -------
+    tabela : pd.DataFrame
+        Uma linha por mês (índice = df.index), com as colunas: a data; uma coluna por
+        detector (True = o detector marcou o mês); avaliaram (quantos detectores
+        avaliaram o mês); votos (quantos o marcaram); media (média das frequências
+        entre os que avaliaram); ensemble (marcação final, segundo a regra).
+
+    Raises
+    ------
+    ValueError
+        Se metodos tiver um detector desconhecido ou se regra não for uma das opções.
+    """
+    # Sem lista de variáveis: usa todas as colunas de df que não são metadados
+    if variaveis is None:
+        _, variaveis = separar_colunas(df)
+
+    # Tabela de resultados: começa com a data de cada mês
+    tabela = df[[coluna_data]].copy()
+
+    # Frequência de cada detector, uma coluna por detector (NaN = o detector não avaliou o mês)
+    frequencias = pd.DataFrame(index=df.index)
+
+    for metodo in metodos:
+        if metodo == "IF":
+            frequencia, consenso = isolation_forest(df, variaveis, contaminacoes=contaminacoes,
+                                                    n_seeds=n_seeds, limiar=limiar)
+        elif metodo == "LOF":
+            frequencia, consenso = detect_outliers_lof(df, variaveis, contaminacoes=contaminacoes, limiar=limiar)
+        elif metodo == "KNN":
+            frequencia, consenso = detect_outliers_knn(df, variaveis, contaminacoes=contaminacoes, limiar=limiar)
+        elif metodo == "K-Means":
+            frequencia, consenso = detect_outliers_pca_kmeans(df, variaveis, contaminacoes=contaminacoes,
+                                                              n_seeds=n_seeds, limiar=limiar)
+        else:
+            raise ValueError(f"Método desconhecido: {metodo}. Use 'IF', 'LOF', 'KNN' ou 'K-Means'.")
+
+        tabela[metodo] = consenso
+        frequencias[metodo] = frequencia
+
+    # Quantos detectores avaliaram cada mês e quantos o marcaram (True vale 1).
+    # list(metodos): com uma tupla entre colchetes, o pandas procuraria uma coluna só com esse nome
+    tabela["avaliaram"] = frequencias.notna().sum(axis=1)
+    tabela["votos"] = tabela[list(metodos)].sum(axis=1)
+
+    # Média das frequências entre os detectores que avaliaram o mês (o mean ignora os NaN)
+    tabela["media"] = frequencias.mean(axis=1)
+
+    if regra == "maioria":
+        # "Mais da metade" sem divisão: evita dividir por 0 quando nenhum detector avaliou o mês
+        tabela["ensemble"] = tabela["votos"] * 2 > tabela["avaliaram"]
+    elif regra == "unanimidade":
+        tabela["ensemble"] = (tabela["votos"] == tabela["avaliaram"]) & (tabela["avaliaram"] > 0)
+    elif regra == "qualquer":
+        tabela["ensemble"] = tabela["votos"] >= 1
+    elif regra == "media":
+        # NaN >= limiar dá False: mês que nenhum detector avaliou não é marcado
+        tabela["ensemble"] = tabela["media"] >= limiar_media
+    else:
+        raise ValueError(f"Regra desconhecida: {regra}. Use 'maioria', 'unanimidade', 'qualquer' ou 'media'.")
+
+    if verbose:
+        print(f"Ensemble ({' + '.join(metodos)}, regra '{regra}'): {tabela['ensemble'].sum()} meses marcados")
+        print(f"Meses avaliados por um único detector: {(tabela['avaliaram'] == 1).sum()}")
+
+    return tabela
 
 
 # %% [markdown]

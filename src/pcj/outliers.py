@@ -981,3 +981,93 @@ def remove_outliers(df, variaveis=None, method='zscore', salvar_arquivo=True, **
         return remove_outliers_lof(df, variaveis, salvar_arquivo=salvar_arquivo, **kwargs)
     else:
         raise ValueError(f"Unknown method: {method}")
+
+
+# %% [markdown]
+# # Tratamento de Outliers
+#
+# Em vez de remover o mês inteiro, troca por NaN só os valores marcados, nos meses marcados.
+# O mês continua na base, e a imputação preenche os valores apagados depois.
+
+# %%
+def tratar_outliers(df, marcacao_meses, mascara_valores, coluna_data="Data", verbose=False):
+    """
+    Trata outliers valor a valor: troca por NaN os valores marcados por
+    mascara_valores, mas só nos meses marcados por marcacao_meses. O mês
+    continua na base; os valores apagados ficam para a imputação.
+
+    Uso típico: marcacao_meses vem de um método multivariado, que diz QUAL MÊS
+    é estranho (ex.: a coluna "ensemble" de detect_outliers_ensemble), e
+    mascara_valores vem de um univariado, que diz QUAL VARIÁVEL (ex.: a máscara
+    de detect_outliers_iqr). Para tratar todos os valores da máscara, sem filtro
+    de meses, use marcacao_meses = pd.Series(True, index=df.index).
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame a ser tratado.
+    marcacao_meses : pd.Series of bool
+        Uma resposta por mês (índice = df.index): True = mês marcado.
+    mascara_valores : pd.DataFrame of bool
+        Máscara por valor (índice = df.index; colunas = variáveis): True = valor marcado.
+        As colunas da máscara definem as variáveis tratadas.
+    coluna_data : str, default "Data"
+        Nome da coluna de df com a data de cada mês.
+    verbose : bool, default False
+        Rodar a função exibe (print) um texto resumido dos resultados.
+
+    Returns
+    -------
+    df_tratado : pd.DataFrame
+        Cópia de df com os valores tratados trocados por NaN.
+    registro : pd.DataFrame
+        Uma linha por valor trocado por NaN, com a data do mês, a variável
+        e o valor original. Documenta o tratamento (ex.: para investigar se
+        os valores são erros ou eventos reais).
+
+    Raises
+    ------
+    ValueError
+        Se marcacao_meses ou mascara_valores tiverem índice diferente do de df,
+        ou não forem True/False.
+    """
+    # Com índices diferentes, o pandas alinharia as linhas erradas (ou criaria NaN) sem avisar
+    if not (marcacao_meses.index.equals(df.index) and mascara_valores.index.equals(df.index)):
+        raise ValueError("marcacao_meses e mascara_valores precisam ter o mesmo índice de df.")
+
+    # Com NaN ou números no lugar de True/False, o ~ e o .loc abaixo dariam resultados errados
+    if marcacao_meses.dtype != bool or not (mascara_valores.dtypes == bool).all():
+        raise ValueError("marcacao_meses e mascara_valores precisam ser True/False.")
+
+    # As colunas da máscara definem as variáveis tratadas
+    variaveis = list(mascara_valores.columns)
+
+    # Valores a tratar: marcados pela máscara E num mês marcado.
+    # Começa da máscara e desliga os meses não marcados: neles, nada é tratado.
+    # (mascara_valores & marcacao_meses não serviria: o pandas alinharia a Series com as colunas, não com as linhas)
+    tratar = mascara_valores.copy()
+    tratar.loc[~marcacao_meses] = False
+
+    # Cópia de df com os valores tratados trocados por NaN (o mask troca onde tratar é True)
+    df_tratado = df.copy()
+    df_tratado[variaveis] = df[variaveis].mask(tratar)
+
+    # Registro: uma linha por valor trocado por NaN, com o valor original
+    linhas = []
+    for indice, linha in tratar.iterrows():
+        # linha.index[linha]: nomes das variáveis que estão True nesse mês (como em resumo_por_mes)
+        for variavel in linha.index[linha]:
+            linhas.append({
+                coluna_data: df.at[indice, coluna_data],
+                "variavel": variavel,
+                "valor_original": df.at[indice, variavel],
+            })
+    registro = pd.DataFrame(linhas, columns=[coluna_data, "variavel", "valor_original"])
+
+    if verbose:
+        meses_tratados = tratar.any(axis=1)
+        sem_valor = marcacao_meses & ~meses_tratados
+        print(f"Valores trocados por NaN: {len(registro)}, em {meses_tratados.sum()} meses")
+        print(f"Meses marcados sem nenhum valor marcado (ficam intactos): {sem_valor.sum()}")
+
+    return df_tratado, registro

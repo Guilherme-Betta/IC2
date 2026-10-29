@@ -90,14 +90,16 @@ def isolation_forest(
 
 
 # %% [markdown]
-# # Random Forest - Classificação
+# # Random Forest - Regressão
 
 # %%
-def random_forest(df, variaveis=None, var_alvo='pH'):
+def random_forest(df, variaveis=None, var_alvo='pH', n_blocos=5, embaralhar=False):
     """
-    Roda um algoritmo de classificação com o modelo Random Forest.
-    Testa a acurácia das classificações do modelo com as métricas 
-    de avaliação "MAE", "RMSE" e "R²", e com uma validação cruzada.
+    Roda um algoritmo de regressão com o modelo Random Forest.
+    Avalia o modelo com validação cruzada: divide os meses em n_blocos, e cada bloco é testado
+    uma vez, com o modelo treinado nos outros blocos.
+    Testa a qualidade das previsões do modelo com as métricas de avaliação "MAE", "RMSE" e "R²",
+    juntando as previsões de todos os blocos, e com o R² de cada bloco.
     Imprime esses resultados no final.
 
     Parameters
@@ -107,7 +109,13 @@ def random_forest(df, variaveis=None, var_alvo='pH'):
     variaveis : list, optional
         Lista com nomes das colunas identificadas como variaveis de df, by default None
     var_alvo : str, optional
-        Variável alvo de classificação, by default 'pH'
+        Variável alvo da regressão, by default 'pH'
+    n_blocos : int, optional
+        Número de blocos da validação cruzada, by default 5
+    embaralhar : bool, optional
+        Se False, cada bloco é um período de meses seguidos (a base está em ordem de data),
+        e o modelo é testado em anos que não viu. Se True, os meses são sorteados para os
+        blocos (KFold aleatório, random_state=42), by default False
     """    
     X = df.copy()
 
@@ -124,37 +132,50 @@ def random_forest(df, variaveis=None, var_alvo='pH'):
     x = X_nonan[variaveis].drop(var_alvo, axis=1) 
     y = X_nonan[var_alvo]
 
-    # Divisão de treino e teste
-    from sklearn.model_selection import train_test_split
+    # Divisão dos meses em blocos para a validação cruzada. Sem embaralhar, o KFold corta a base
+    # na ordem das linhas (ordem de data): cada bloco é um período de meses seguidos
+    from sklearn.model_selection import KFold
 
-    x_train, x_test, y_train, y_test = train_test_split(x, y, 
-                                                        test_size=0.3,  # Estou copiando do tutorial
-                                                        random_state=42
-                                                        )
-    
-    # Criando o modelo
+    if embaralhar:
+        kfold = KFold(n_splits=n_blocos, shuffle=True, random_state=42)
+    else:
+        kfold = KFold(n_splits=n_blocos)
+
+    # Bibliotecas do modelo e das métricas
+    import pandas as pd
     from sklearn.ensemble import RandomForestRegressor
-
-    model = RandomForestRegressor(n_estimators=100,    # Copiando do tutorial
-                                random_state=42)
-
-    # Treinando o modelo
-    model.fit(x_train, y_train)
-
-    # Previsões
-    y_pred = model.predict(x_test)
-
-    # Avaliação do Desempenho
     from sklearn.metrics import root_mean_squared_error, mean_absolute_error, r2_score
 
-    print("RMSE:", root_mean_squared_error(y_test, y_pred))
-    print("MAE:", mean_absolute_error(y_test, y_pred))
-    print("r²:", r2_score(y_test, y_pred))
+    # Previsão de cada mês, feita quando o bloco dele é o de teste
+    y_pred = pd.Series(index=y.index, dtype=float)
+    r2_blocos = []
 
-    # Validação Cruzada
-    from sklearn.model_selection import cross_val_score
+    # Cada volta do laço usa um bloco como teste e os outros como treino
+    for treino, teste in kfold.split(x):
+        x_train, x_test = x.iloc[treino], x.iloc[teste]
+        y_train, y_test = y.iloc[treino], y.iloc[teste]
 
-    print("Validação Cruzada:", cross_val_score(model, x_test, y_test, cv=10))
+        # Criando o modelo
+        model = RandomForestRegressor(n_estimators=100,    # Copiando do tutorial
+                                    random_state=42)
+
+        # Treinando o modelo
+        model.fit(x_train, y_train)
+
+        # Previsões do bloco de teste
+        y_pred.iloc[teste] = model.predict(x_test)
+
+        r2_blocos.append(r2_score(y_test, y_pred.iloc[teste]))
+
+    # Avaliação do Desempenho, juntando as previsões de todos os blocos
+    print("RMSE:", root_mean_squared_error(y, y_pred))
+    print("MAE:", mean_absolute_error(y, y_pred))
+    print("r²:", r2_score(y, y_pred))
+
+    # Validação Cruzada: R² de cada bloco e média ± DP dos blocos
+    r2_blocos = pd.Series(r2_blocos)
+    print("R² de cada bloco:", r2_blocos.round(3).tolist())
+    print(f"R² dos blocos: média {r2_blocos.mean():.3f} ± DP {r2_blocos.std():.3f}")
 
     # O tutorial também faz o accuracy score, que eu deveria adequar para
     # as métricas, mas acho que acabaria dando na mesma.

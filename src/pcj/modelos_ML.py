@@ -164,13 +164,16 @@ def random_forest(df, variaveis=None, var_alvo='pH'):
 # # KNN Regressor
 
 # %%
-def knn_regressor(df, variaveis=None):
+def knn_regressor(df, variaveis=None, n_blocos=5, embaralhar=False):
     """
     Roda um algoritmo de previsão de valores de uma determinada coluna.
     Roda esse algoritmo para todas as colunas de variáveis da base de dados.
-    Utiliza GridSearchCV para determinar a melhor parametrização do KNN para cada variável.
-    Avalia o desempenho do modelo com as métricas de avaliação "MAE", "RMSE" e "R²".
-    Imprime os resultados de cada métrica, para cada variável no final.
+    Avalia o modelo com validação cruzada: divide os meses em n_blocos, e cada bloco é testado
+    uma vez, com o modelo treinado nos outros blocos.
+    Em cada bloco, utiliza GridSearchCV para determinar a melhor parametrização do KNN,
+    usando só os blocos de treino.
+    Avalia o desempenho do modelo com as métricas de avaliação "MAE", "RMSE" e "R²",
+    juntando as previsões de todos os blocos.
 
     Parameters
     ----------
@@ -178,6 +181,23 @@ def knn_regressor(df, variaveis=None):
         DataFrame de interesse
     variaveis : list, optional
         Lista com nomes das colunas identificadas como variáveis de df, by default None
+    n_blocos : int, optional
+        Número de blocos da validação cruzada, by default 5
+    embaralhar : bool, optional
+        Se False, cada bloco é um período de meses seguidos (a base está em ordem de data),
+        e o modelo é testado em anos que não viu. Se True, os meses são sorteados para os
+        blocos (KFold aleatório, random_state=42), by default False
+
+    Returns
+    -------
+    resultado : pd.DataFrame
+        Uma linha por variável alvo, com as colunas:
+        - variavel: variável prevista
+        - rmse, mae, r2: métricas juntando as previsões de todos os blocos
+          (cada mês é previsto uma vez, quando o bloco dele é o de teste)
+        - r2_blocos: lista com o R² de cada bloco
+        - melhores_parametros: parâmetros escolhidos pelo GridSearchCV no maior número de blocos
+        - n_blocos_parametros: em quantos blocos esses parâmetros foram escolhidos
     """
     X = df.dropna().copy()
 
@@ -189,7 +209,7 @@ def knn_regressor(df, variaveis=None):
 
     import pandas as pd
     from sklearn.preprocessing import MinMaxScaler
-    from sklearn.model_selection import train_test_split
+    from sklearn.model_selection import KFold
     from sklearn.neighbors import KNeighborsRegressor
     from sklearn.model_selection import GridSearchCV
     from sklearn.metrics import mean_absolute_error, root_mean_squared_error, r2_score
@@ -204,65 +224,82 @@ def knn_regressor(df, variaveis=None):
 
     limpos_norm = pd.DataFrame(limpos_norm, columns=colunas)
 
-    # 3) Loop
+    # 3) Validação cruzada e grade de hiperparâmetros
+
+    # Divisão dos meses em blocos. Sem embaralhar, o KFold corta a base na ordem das linhas
+    # (ordem de data): cada bloco é um período de meses seguidos
+    if embaralhar:
+        kfold = KFold(n_splits=n_blocos, shuffle=True, random_state=42)
+    else:
+        kfold = KFold(n_splits=n_blocos)
+
+    # Ajuste dos Hiperparâmetros com GridSearchCV
+    ## Definição da grade de hiperparâmetros
+    param_grid = {
+    'n_neighbors': [1, 3, 5, 7, 9, 11, 13, 15], # Número de vizinhos considerados pelo algoritmo
+    'weights': ['uniform', 'distance'], # Como o algoritmo deve pesar as distâncias dos vizinhos
+                                        # 'uniform' = uniformemente, 'distance' = em função da distância entre vizinhos
+    'metric': ['euclidean', 'manhattan', 'minkowski']   # Que métrica de distância usar
+    }
+
+    # Lista que será convertida em DataFrame, com as métricas de todas as variáveis
+    linhas = []
+
+    # 4) Loop
 
     # Selecionará cada variável como variável alvo
     for target_col in colunas:
-        print(f"Variável: {target_col}", "\n")
 
         y = limpos_norm[target_col]
         x = limpos_norm.drop(target_col, axis=1)    # Features = Todas as colunas, exceto a alvo
-        
-        # Divisão em conjuntos de treinamento e teste para treinamento
-        x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.2)
 
-        # Inicialização do modelo
-        model = KNeighborsRegressor(n_neighbors=5)
+        # Previsão de cada mês, feita quando o bloco dele é o de teste
+        y_pred = pd.Series(index=y.index, dtype=float)
+        r2_blocos = []
+        parametros_blocos = []
 
-        # Treinamento
-        model.fit(x_train, y_train)
+        # Cada volta do laço usa um bloco como teste e os outros como treino
+        for treino, teste in kfold.split(x):
+            x_train, x_test = x.iloc[treino], x.iloc[teste]
+            y_train, y_test = y.iloc[treino], y.iloc[teste]
 
-        # Avaliação do Modelo com o método `score`
-        result = model.score(x_test, y_test)
-        print(f"Precisão do modelo no conjunto de teste: {result: .2%}")
+            # Executando o GridSearchCV só com os blocos de treino.
+            # O cv=5 é uma segunda validação cruzada, dentro do treino, que escolhe os parâmetros
+            grid_search = GridSearchCV(KNeighborsRegressor(), param_grid,
+                                    cv=5)   # Coloquei 5 por causa do tutorial, não sei do que sse trata
 
-        # Ajuste dos Hiperparâmetros com GridSearchCV
-        ## Definição da grade de hiperparâmetros
-        param_grid = {
-        'n_neighbors': [1, 3, 5, 7, 9, 11, 13, 15], # Número de vizinhos considerados pelo algoritmo
-        'weights': ['uniform', 'distance'], # Como o algoritmo deve pesar as distâncias dos vizinhos
-                                            # 'uniform' = uniformemente, 'distance' = em função da distância entre vizinhos
-        'metric': ['euclidean', 'manhattan', 'minkowski']   # Que métrica de distância usar
-        }
+            grid_search.fit(x_train, y_train)
 
-        # Executando o GridSearchCV
-        grid_search = GridSearchCV(KNeighborsRegressor(), param_grid,
-                                cv=5)   # Coloquei 5 por causa do tutorial, não sei do que sse trata
+            # Treinamento com os Melhores Parâmetros
+            ## Seleção dos melhores hiperparâmetros identificados pelo GridSearchCV
+            best_knn = KNeighborsRegressor(**grid_search.best_params_)
 
-        grid_search.fit(x_train, y_train)
+            ## Treinamento
+            best_knn.fit(x_train, y_train)
 
-        ## Resultados
+            # Previsão do bloco de teste
+            y_pred.iloc[teste] = best_knn.predict(x_test)
 
-        print("Melhores parâmetros: ", grid_search.best_params_)
-        
-        # Treinamento com os Melhores Parâmetros
-        ## Seleção dos melhores hiperparâmetros identificados pelo GridSearchCV
-        best_knn = KNeighborsRegressor(**grid_search.best_params_)
+            r2_blocos.append(r2_score(y_test, y_pred.iloc[teste]))
 
-        ## Treinamento
-        best_knn.fit(x_train, y_train)
+            # str transforma o dicionário de parâmetros em texto, para contar quantas vezes ele se repete
+            parametros_blocos.append(str(grid_search.best_params_))
 
-        # Avaliação do modelo com Métricas
-        y_pred = best_knn.predict(x_test)
+        # Parâmetros escolhidos no maior número de blocos (value_counts conta e ordena do mais frequente)
+        contagem = pd.Series(parametros_blocos).value_counts()
 
-        rmse = root_mean_squared_error(y_test, y_pred)
-        mae = mean_absolute_error(y_test, y_pred)
-        r2 = r2_score(y_test, y_pred)
+        # Avaliação do modelo com Métricas, juntando as previsões de todos os blocos
+        linhas.append({
+            "variavel": target_col,
+            "rmse": root_mean_squared_error(y, y_pred),
+            "mae": mean_absolute_error(y, y_pred),
+            "r2": r2_score(y, y_pred),
+            "r2_blocos": [round(r, 3) for r in r2_blocos],
+            "melhores_parametros": contagem.index[0],
+            "n_blocos_parametros": contagem.iloc[0]
+        })
 
-        print(f"RMSE: {rmse:.4f}")
-        print(f"MAE: {mae:.4f}")
-        print(f"R²: {r2:.4f}")
-        print("--------------")
+    return pd.DataFrame(linhas)
 
 
 # %% [markdown]

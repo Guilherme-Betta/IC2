@@ -505,87 +505,125 @@ def correlacao(df, method='pearson', plot=False, salvar=True):
 # # K-Means
 
 # %%
-def k_means_clusters(df, variaveis=None, 
-                     n_clusters=10, pca=False, norm=False):
+def k_means_clusters(df, tabela, variaveis=None, eixos=None, nome="k_means_clusters", plot=False, salvar=True):
     """
-    Gera figuras da base de dados, colorida de acordo com os agrupamentos identificados
-    pelo algoritmo K-Means, para cada quantidade de clusters estabelecida.
+    Gera a figura dos grupos formados pelo K-Means (função modelos_ML.k_means): cada
+    mês é um ponto, com a cor e o marcador do seu grupo. Os grupos vêm prontos da
+    tabela da k_means; a função só escolhe os eixos da figura (o "ângulo" da foto),
+    então trocar os eixos não muda os grupos.
 
     Parameters
     ----------
     df : pd.DataFrame
-        DataFrame de interesse
+        O mesmo DataFrame usado na k_means.
+    tabela : pd.DataFrame
+        Primeiro valor devolvido pela k_means: uma linha por mês, com a coluna "grupo"
+        (<NA> nos meses não agrupados, que ficam fora da figura).
     variaveis : list, optional
-        Lista contendo os nomes das colunas identificadas como variaveis de df, by default False
-    n_clusters : int, optional
-         Define o número máximo de clusters que será testado pelo modelo, by default 10
-    pca : bool, optional
-        Se "True", gerará figuras que utilizam os dados pós redução de dimensionalidade PCA, by default False
-    norm : bool, optional
-        Se "True", gerará figuras que utilizam os dados pós normalização dos dados brutos, by default False
-        Se tanto "pca" quanto "norm" forem "False", as figuras usam os dados brutos de df
-    """    
-    from sklearn.cluster import KMeans
+        Lista com nomes das colunas identificadas como variaveis de df, by default None
+    eixos : tuple of str, optional
+        Duas variáveis de df para os eixos x e y (ex.: ("TURB.", "Cond.")): fácil de ler,
+        mas mostra só 2 das variáveis. Se None, usa os dois primeiros componentes
+        principais (PC1 e PC2), no mesmo espaço da k_means, com a fração da variação
+        que cada um guarda no rótulo, by default None
+    nome : str, default "k_means_clusters"
+        Nome base do arquivo salvo.
+    plot : bool, default False
+        Determina se o código deve gerar visualizações
+        ao ser carregado.
+    salvar : bool, default True
+        Determina se o código deve salvar as visualizações
+        ao ser carregado.
 
-    n_clusters_list = list(range(2, int(n_clusters) + 1))
+    Returns
+    -------
+    None
 
-    X = df.copy()
-
-    if not variaveis:
+    Raises
+    ------
+    ValueError
+        Se a tabela tiver mais grupos do que a figura consegue distinguir (8).
+    """
+    if variaveis is None:
         from pcj.utils import separar_colunas
-        metadados, variaveis = separar_colunas(df)
+        _, variaveis = separar_colunas(df)
 
-    # Eliminar células vazias
-    X = X[variaveis].dropna(axis=0, how='any')
-    
-    # Salvar o Index do DataFrame sem células vazias numa variável
-    idx_nonan = X.index
+    # Cores e marcadores em ordem fixa (grupo 0, 1, 2...). O marcador diferente ajuda quem não distingue as cores
+    cores = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300", "#6250d6", "#e34948"]
+    marcadores = ["o", "^", "s", "D", "v", "P", "X", "*"]
+    cor_texto = "#0b0b0b"
+    cor_eixos = "#898781"
+    cor_grade = "#e1e0d9"
 
-    # Trasnformar em numpy array (a sintaxe de dois índices ([:, 0]) não é válida para pd.DataFrames. O pandas lança InvalidIndexError.)
+    # Só os meses agrupados (os outros têm grupo <NA>)
+    grupos = tabela["grupo"].dropna()
+    lista_grupos = sorted(grupos.unique())
 
-    X = X.to_numpy()
+    if len(lista_grupos) > len(cores):
+        raise ValueError(f"A figura distingue até {len(cores)} grupos; a tabela tem {len(lista_grupos)}.")
 
-    # Normalização dos dados. É um pré requisito para o PCA funcionar
-    if norm or pca:
+    # 1. Coordenadas de cada mês nos eixos da figura
+    if eixos is None:
         from sklearn.preprocessing import StandardScaler
+        from sklearn.decomposition import PCA
+
+        # O mesmo espaço da k_means: os meses agrupados, padronizados e reduzidos por PCA (95% da variância)
+        X_nonan = df.loc[grupos.index, variaveis]
 
         scaler = StandardScaler()   # Coloca todas as variáveis na mesma escala, com média = 0 e desvio padrão = 1.
-        X = scaler.fit_transform(X)
+        X_scaled = scaler.fit_transform(X_nonan)
 
-    # Redução da dimensionalidade
-    if pca:
-        from sklearn.decomposition import PCA
         pca = PCA(n_components=0.95, # Mantém 95% da variância
                 random_state=0)
-        X = pca.fit_transform(X)
+        X_pca = pca.fit_transform(X_scaled)
 
-    # Geração de figuras
-    fig, axs = plt.subplots(
-        1,
-        len(n_clusters_list),
-        figsize=(20, 10)
-    )
+        # Os dois primeiros componentes são os que guardam mais variação: o melhor "ângulo" para uma figura plana
+        x = X_pca[:, 0]
+        y = X_pca[:, 1]
 
-    axs = axs.T
+        variacao = pca.explained_variance_ratio_
+        rotulo_x = f"PC1 ({variacao[0]:.0%} da variação)"
+        rotulo_y = f"PC2 ({variacao[1]:.0%} da variação)"
+    else:
+        x = df.loc[grupos.index, eixos[0]].to_numpy()
+        y = df.loc[grupos.index, eixos[1]].to_numpy()
 
-    for i, n_clusters in enumerate(n_clusters_list):
-        kmeans = KMeans(n_clusters=n_clusters, random_state=0, n_init="auto")
-        kmeans.fit(X)
-        centers = kmeans.cluster_centers_
+        rotulo_x = eixos[0]
+        rotulo_y = eixos[1]
 
-        axs[i].scatter(X[:, 0], X[:, 1], s=10, c=kmeans.labels_)
-        axs[i].scatter(centers[:, 0], centers[:, 1], c="r", s=20)
+    # 2. Figura: um conjunto de pontos por grupo
+    fig, ax = plt.subplots(figsize=(8, 6))
 
-        axs[i].set_title(f"{kmeans} : {n_clusters} clusters")
+    for i, grupo in enumerate(lista_grupos):
+        # True nos meses do grupo (to_numpy(dtype=bool): o grupo é "Int64", e a comparação devolve o booleano do pandas)
+        no_grupo = (grupos == grupo).to_numpy(dtype=bool)
 
-    for ax in axs.flat:
-        ax.label_outer()
-        ax.set_xticks([])
-        ax.set_yticks([])
+        ax.scatter(x[no_grupo], y[no_grupo], s=45, color=cores[i], marker=marcadores[i],
+                   edgecolors="white", linewidths=0.6, label=f"grupo {grupo} ({no_grupo.sum()} meses)")
+
+    # Títulos, eixos e grade
+    ax.set_title(f"Grupos do K-Means (k = {len(lista_grupos)})", color=cor_texto)
+    ax.set_xlabel(rotulo_x, color=cor_eixos)
+    ax.set_ylabel(rotulo_y, color=cor_eixos)
+    ax.legend(frameon=False)
+    ax.tick_params(colors=cor_eixos)
+    ax.grid(color=cor_grade, linewidth=0.8)
+    ax.set_axisbelow(True)
+
+    # Sem as bordas de cima e da direita
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
 
     plt.tight_layout()
 
-    plt.show()
+    # Salva sem fechar a figura (o salvar_plot fecha), para ela ainda poder ser exibida
+    if salvar:
+        salvar_visualizacao(fig, nome)
+
+    if plot:
+        plt.show()
+    else:
+        plt.close(fig)
 
 
 # %% [markdown]

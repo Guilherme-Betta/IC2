@@ -732,6 +732,128 @@ def curvas_selecao_k(resumo, nome="selecao_k", plot=False, salvar=True):
 
 
 # %% [markdown]
+# # Validação das imputações
+
+# %%
+def validacao_imputacoes(resumo, metrica="rmse", nome=None, plot=False, salvar=True):
+    """
+    Gera a figura de validação das imputações do experimento A: um painel por
+    variável, na unidade dela, com uma barra por método de imputação. A altura da
+    barra é a métrica calculada juntando as células de todas as rodadas
+    (metricas_avaliacao.metricas_juntando), e a barra de erro é o desvio padrão
+    da métrica entre as rodadas.
+
+    Parameters
+    ----------
+    resumo : pd.DataFrame
+        Uma linha por método × variável, com as colunas "metodo", "pct_faltantes",
+        "variavel", "<metrica>" e "<metrica>_dp" (o resumo do notebook
+        aplicacoes/avaliacoes_imputacoes, gravado na aba "resumo" do
+        avaliacao_imputacoes_A.xlsx).
+    metrica : str, default "rmse"
+        "rmse" ou "mae". O R² fica de fora porque não tem DP entre as rodadas.
+    nome : str, optional
+        Nome base do arquivo salvo. Se None, usa "validacao_imputacoes_<metrica>", by default None
+    plot : bool, default False
+        Determina se o código deve gerar visualizações
+        ao ser carregado.
+    salvar : bool, default True
+        Determina se o código deve salvar as visualizações
+        ao ser carregado.
+
+    Returns
+    -------
+    None
+
+    Raises
+    ------
+    ValueError
+        Se a métrica não for "rmse" nem "mae".
+    """
+    if metrica not in ["rmse", "mae"]:
+        raise ValueError(f'A métrica deve ser "rmse" ou "mae" (o R² não tem DP entre as rodadas); veio "{metrica}".')
+
+    if nome is None:
+        nome = f"validacao_imputacoes_{metrica}"
+
+    # Cores por método (as mesmas da curvas_selecao_k e da k_means_clusters); textos e eixos em tons neutros
+    cores = {"media": "#2a78d6", "mediana": "#eb6834", "knn": "#1baf7a"}
+    nomes_metodos = {"media": "Média", "mediana": "Mediana", "knn": "KNN"}
+    cor_texto = "#0b0b0b"
+    cor_eixos = "#898781"
+    cor_grade = "#e1e0d9"
+    cor_erro = "#52514e"
+
+    # 1. Métodos e variáveis na ordem em que aparecem no resumo (a ordem da base)
+    metodos = list(resumo["metodo"].unique())
+    variaveis = list(resumo["variavel"].unique())
+
+    # 2. Grade de painéis: 4 colunas e quantas linhas forem precisas
+    #    (squeeze=False: axs é sempre uma tabela de painéis, mesmo com uma linha só)
+    n_colunas = 4
+    n_linhas = math.ceil(len(variaveis) / n_colunas)
+    fig, axs = plt.subplots(n_linhas, n_colunas, figsize=(12, 2.6 * n_linhas), squeeze=False)
+
+    for n, variavel in enumerate(variaveis):
+        # Linha e coluna do painel desta variável (// é a divisão inteira; % é o resto)
+        ax = axs[n // n_colunas, n % n_colunas]
+
+        # Uma barra por método, com o DP entre as rodadas como barra de erro
+        for j, metodo in enumerate(metodos):
+            linha = resumo[(resumo["metodo"] == metodo) & (resumo["variavel"] == variavel)].iloc[0]
+
+            ax.bar(
+                j,
+                linha[metrica],
+                yerr=linha[f"{metrica}_dp"],
+                width=0.7,
+                color=cores[metodo],
+                capsize=3,
+                error_kw={"ecolor": cor_erro, "elinewidth": 1},
+            )
+
+        # Título, eixos e grade. Os métodos não aparecem no eixo x: a cor diz qual é (ver a legenda)
+        ax.set_title(variavel, color=cor_texto)
+        ax.set_xticks([])
+        ax.tick_params(colors=cor_eixos)
+        ax.grid(axis="y", color=cor_grade, linewidth=0.8)
+        ax.set_axisbelow(True)
+
+        # Sem as bordas de cima e da direita
+        ax.spines["top"].set_visible(False)
+        ax.spines["right"].set_visible(False)
+
+    # 3. Painéis que sobram na grade (quando o número de variáveis não é múltiplo de 4) ficam em branco
+    for n in range(len(variaveis), n_linhas * n_colunas):
+        axs[n // n_colunas, n % n_colunas].axis("off")
+
+    # 4. Uma legenda para a figura toda, com a taxa de falhas simulada de cada método (lida do resumo).
+    #    Os quadrados (Rectangle) só servem para desenhar a cor de cada método na legenda
+    quadrados = []
+    rotulos = []
+    for metodo in metodos:
+        pct = resumo.loc[resumo["metodo"] == metodo, "pct_faltantes"].iloc[0]
+        quadrados.append(plt.Rectangle((0, 0), 1, 1, color=cores[metodo]))
+        rotulos.append(f"{nomes_metodos[metodo]} ({pct:.0%} de falhas)")
+
+    fig.suptitle(f"{metrica.upper()} das imputações ± DP entre as rodadas (na unidade de cada variável)",
+                 color=cor_texto, y=0.995)
+    fig.legend(quadrados, rotulos, loc="upper center", bbox_to_anchor=(0.5, 0.965), ncol=len(metodos), frameon=False)
+
+    # rect deixa livre a faixa de cima da figura, onde ficam o título e a legenda
+    plt.tight_layout(rect=(0, 0, 1, 0.93))
+
+    # Salva sem fechar a figura (o salvar_plot fecha), para ela ainda poder ser exibida
+    if salvar:
+        salvar_visualizacao(fig, nome)
+
+    if plot:
+        plt.show()
+    else:
+        plt.close(fig)
+
+
+# %% [markdown]
 # # Todas as Visualizações
 
 # %%

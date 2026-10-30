@@ -467,104 +467,89 @@ def selecao_k(df, variaveis=None, k_min=2, k_max=10, n_seeds=30, verbose=False):
 # # K-Means - Clustering
 
 # %%
-def k_means(df, variaveis=None, n_clusters=10):
-      """
-      Roda o algoritmo de agrupamento K-Means.
-      Roda 3 casos: 
-      1. Dados brutos,
-      2. Dados brutos pós normalização, 
-      3. Dados normalizados pós redução de dimensionalidade PCA.
-      Imprime as matrizes contendo todas as distâncias, rótulos e centros
-      calculados pelo algoritmo em cada caso.
+def k_means(df, variaveis=None, n_clusters=2, coluna_data="Data", verbose=False):
+    """
+    Agrupa os meses com o algoritmo K-Means, no mesmo espaço da detecção de outliers
+    e da selecao_k: meses completos, padronizados e reduzidos por PCA (95% da variância).
+    O K-Means testa 10 posições iniciais dos centros e fica com a de menor inércia
+    (n_init=10, random_state=42), para o resultado não depender de um único sorteio.
 
-      Parameters
-      ----------
-      df : pd.DataFrame
-          DataFrame de interesse.
-      variaveis : list, optional
-          Lista com nomes das colunas identificadas como variáveis de df, by default None
-      n_clusters : int, optional
-          Define o número máximo de clusters que será testado pelo modelo, by default 10
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame de interesse.
+    variaveis : list, optional
+        Lista com nomes das colunas identificadas como variaveis de df, by default None
+    n_clusters : int, optional
+        Número de grupos (k). Ver selecao_k para a escolha, by default 2
+    coluna_data : str, optional
+        Nome da coluna de df com a data de cada mês, by default "Data"
+    verbose : bool, optional
+        Rodar a função exibe (print) quantos meses ficaram em cada grupo, by default False
 
-      Returns
-      -------
-      distancias : list
-          Lista contendo matrizes com todas as distâncias calculadas pelo algoritmo.
-          Uma matriz para cada caso: Dados Brutos, Dados Normalizados, Dados com Redução
-          de Dimensionalidade PCA
-      rotulos : list
-          Lista contendo matrizes com todos os rótulos calculados pelo algoritmo.
-          Uma matriz para cada caso: Dados Brutos, Dados Normalizados, Dados com Redução
-          de Dimensionalidade PCA
-      centros : list
-          Lista contendo matrizes com todos os centros calculados pelo algoritmo.
-          Uma matriz para cada caso: Dados Brutos, Dados Normalizados, Dados com Redução
-          de Dimensionalidade PCA
+    Returns
+    -------
+    tabela : pd.DataFrame
+        Uma linha por mês (índice = df.index), com a data e o grupo do mês.
+        Os meses com dado faltante não são agrupados e ficam com grupo <NA>.
+    perfil : pd.DataFrame
+        Uma linha por grupo, com o número de meses e a média de cada variável na
+        unidade original de df. O número do grupo é só um nome: o grupo 0 não é
+        "menor" que o grupo 1.
+    """
+    # Bibliotecas
+    import pandas as pd
+    from sklearn.cluster import KMeans
+    from sklearn.preprocessing import StandardScaler
+    from sklearn.decomposition import PCA
 
-      """      
-      X = df.copy()
+    if variaveis is None:
+        from pcj.utils import separar_colunas
+        _, variaveis = separar_colunas(df)
 
-      if variaveis is None:
-            from pcj.utils import separar_colunas
-            _, variaveis = separar_colunas(df)
+    # Eliminar células vazias
+    X_nonan = df[variaveis].dropna(axis=0, how='any')
 
-      # Bibliotecas
+    # Salvar o Index do DataFrame sem células vazias numa variável
+    idx_nonan = X_nonan.index
 
-      import numpy as np
-      from sklearn.cluster import KMeans
-      from sklearn.preprocessing import StandardScaler
-      from sklearn.decomposition import PCA
+    # Normalização dos dados. É um pré requisito para o PCA funcionar
+    scaler = StandardScaler()   # Coloca todas as variáveis na mesma escala, com média = 0 e desvio padrão = 1.
+    X_scaled = scaler.fit_transform(X_nonan)
 
-      # Eliminar células vazias
-      X_nonan = X[variaveis].dropna(axis=0, how='any')
+    # Redução da dimensionalidade
+    pca = PCA(n_components=0.95, # Mantém 95% da variância
+          random_state=0)
+    X_pca = pca.fit_transform(X_scaled)
 
-      # Salvar o Index do DataFrame sem células vazias numa variável
-      idx_nonan = X_nonan.index
+    # KMeans - PCA: o melhor de 10 inícios (o de menor inércia), com seed fixa para ser reproduzível
+    kmeans = KMeans(n_clusters=n_clusters, n_init=10, random_state=42)
+    grupos = kmeans.fit_predict(X_pca)
 
-      # Normalização dos dados. É um pré requisito para o PCA funcionar
-      scaler = StandardScaler()   # Coloca todas as variáveis na mesma escala, com média = 0 e desvio padrão = 1.
-      X_scaled = scaler.fit_transform(X_nonan)
+    # Tabela: uma linha por mês de df. O reindex estende para todos os meses: os não agrupados ficam NaN.
+    # "Int64" (com I maiúsculo) é o inteiro do pandas que aceita faltantes: mostra 0 e 1 em vez de 0.0 e 1.0
+    tabela = df[[coluna_data]].copy()
+    tabela["grupo"] = pd.Series(grupos, index=idx_nonan).reindex(df.index).astype("Int64")
 
-      # Redução da dimensionalidade
-      pca = PCA(n_components=0.95, # Mantém 95% da variância
-            random_state=0)
-      X_pca = pca.fit_transform(X_scaled)
+    # Perfil: uma linha por grupo, com a média de cada variável na unidade original
+    linhas = []
 
-      # KMeans - "Bruto" (X_nonan)
+    for grupo in range(n_clusters):
+        meses_grupo = X_nonan[grupos == grupo]
 
-      kmeans_raw = KMeans(n_clusters=2, # Número de clusters, ajustar para o que for preferido.
-                        random_state=42)
-      cluster_labels_raw = kmeans_raw.fit_predict(X_nonan)
+        linha = {"grupo": grupo, "meses": len(meses_grupo)}
 
-      ## Distâncias euclidianas entre os pontos. Como não foi normalizado, há uma grande variabilidade entre as distâncias
-      distancias_raw = np.linalg.norm(X_nonan - kmeans_raw.cluster_centers_[cluster_labels_raw], axis=1)
+        for variavel in variaveis:
+            linha[variavel] = meses_grupo[variavel].mean()
 
-      # KMeans - Normalizado
+        linhas.append(linha)
 
-      kmeans_norm = KMeans(n_clusters=2, 
-                        random_state=42)
-      cluster_labels_norm = kmeans_norm.fit_predict(X_scaled)
+    perfil = pd.DataFrame(linhas)
 
-      ## Distâncias euclidianas bem menores, pós normalização
-      distancias_norm = np.linalg.norm(X_scaled - kmeans_norm.cluster_centers_[cluster_labels_norm], axis=1)
+    if verbose:
+        print(f"K-Means com k = {n_clusters} em {len(idx_nonan)} meses completos "
+              f"({len(df) - len(idx_nonan)} com NaN, não agrupados); {X_pca.shape[1]} componentes principais")
+        print("Meses por grupo:", perfil["meses"].tolist())
 
-      # KMeans - PCA
-
-      kmeans_pca = KMeans(n_clusters=2,   
-                  random_state=42)
-      cluster_labels_pca = kmeans_pca.fit_predict(X_pca)
-
-      ## Valores similares ao do normalizado, mas com a vantagem de estar em 2 dimensões, permitindo gerar visualizações. 
-      ## A desvantagem é a perda de 5% de informação, devido ao `n_components = 0.95` de antes.
-      distancias_pca = np.linalg.norm(X_pca - kmeans_pca.cluster_centers_[cluster_labels_pca], axis=1)
-
-      distancias = [distancias_raw, distancias_norm, distancias_pca]
-      rotulos = [kmeans_raw.labels_, kmeans_norm.labels_, kmeans_pca.labels_]
-      centros = [kmeans_raw.cluster_centers_, kmeans_norm.cluster_centers_, kmeans_pca.cluster_centers_]
-
-      print("Distâncias Brutas: " , 2*"\n" , distancias_raw , 2*"\n" , "Rótulos Brutos: " , 2*"\n" , rotulos[0] , 2*"\n" , "---------------------------------", "\n",
-            "Distâncias Normalizadas: " , 2*"\n" , distancias_norm , 2*"\n" , "Rótulos Normalizados: " , 2*"\n" , rotulos[1] , 2*"\n" , "---------------------------------", "\n",
-            "Distâncias PCA: " , 2*"\n" , distancias_pca , 2*"\n" , "Rótulos PCA: " , 2*"\n" , rotulos[2])
-
-      return distancias, rotulos, centros
+    return tabela, perfil
 

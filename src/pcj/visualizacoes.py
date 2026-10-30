@@ -589,6 +589,111 @@ def k_means_clusters(df, variaveis=None,
 
 
 # %% [markdown]
+# # K-Means - Escolha do número de grupos (k)
+
+# %%
+def curvas_selecao_k(resumo, nome="selecao_k", plot=False, salvar=True):
+    """
+    Gera a figura dos três critérios de escolha de k (saída da função
+    modelos_ML.selecao_k): um painel para a inércia (método do cotovelo), um para a
+    silhueta e um para o Calinski-Harabasz. Cada ponto é a média entre as seeds, e a
+    barra de erro é o desvio padrão. O k apontado por cada critério é marcado com um
+    círculo vazado e um texto.
+
+    Parameters
+    ----------
+    resumo : pd.DataFrame
+        Segundo valor devolvido por selecao_k: uma linha por k, com as colunas
+        "<critério>_media", "<critério>_dp" e "indicado_<critério>".
+    nome : str, default "selecao_k"
+        Nome base do arquivo salvo (ex.: "selecao_k_tratada", para separar as bases).
+    plot : bool, default False
+        Determina se o código deve gerar visualizações
+        ao ser carregado.
+    salvar : bool, default True
+        Determina se o código deve salvar as visualizações
+        ao ser carregado.
+
+    Returns
+    -------
+    None
+    """
+    # Cores: série em azul; marcação do k e textos em tons neutros
+    cor_serie = "#2a78d6"
+    cor_texto = "#0b0b0b"
+    cor_eixos = "#898781"
+    cor_grade = "#e1e0d9"
+
+    # Um painel por critério: (critério, título do painel, coluna que marca o k, rótulo da marcação)
+    criterios = [
+        ("inercia", "Inércia (método do cotovelo)", "indicado_cotovelo", "cotovelo"),
+        ("silhueta", "Coeficiente de silhueta", "indicado_silhueta", "maior média"),
+        ("calinski_harabasz", "Índice de Calinski-Harabasz", "indicado_calinski_harabasz", "maior média"),
+    ]
+
+    fig, axs = plt.subplots(1, 3, figsize=(16, 4.5))
+
+    for i, (criterio, titulo, indicado, rotulo) in enumerate(criterios):
+        ax = axs[i]
+
+        # Média de cada k, com o desvio padrão entre as seeds como barra de erro
+        ax.errorbar(
+            resumo["k"],
+            resumo[f"{criterio}_media"],
+            yerr=resumo[f"{criterio}_dp"],
+            color=cor_serie,
+            linewidth=2,
+            marker="o",
+            markersize=6,
+            capsize=3,
+        )
+
+        # k apontado pelo critério (a linha do resumo com True na coluna "indicado_...")
+        linha = resumo[resumo[indicado]]
+
+        if len(linha) == 0:
+            # Só acontece no cotovelo: o kneed não achou um ponto de inflexão
+            texto = "sem cotovelo"
+        else:
+            k_indicado = linha["k"].iloc[0]
+            valor = linha[f"{criterio}_media"].iloc[0]
+            texto = f"{rotulo}: k = {k_indicado}"
+
+            # Círculo vazado em volta do ponto do k indicado
+            ax.scatter(k_indicado, valor, s=250, facecolors="none", edgecolors=cor_texto, linewidths=1.5, zorder=3)
+
+        # Texto no canto de cima, à direita (transform=ax.transAxes: posição em fração do painel, de 0 a 1),
+        # com fundo branco para não se misturar às barras de erro
+        ax.text(0.97, 0.95, texto, transform=ax.transAxes, ha="right", va="top", color=cor_texto,
+                bbox={"facecolor": "white", "edgecolor": cor_grade, "boxstyle": "round,pad=0.3"})
+
+        # Títulos, eixos e grade
+        ax.set_title(titulo, color=cor_texto)
+        ax.set_xlabel("Número de grupos (k)", color=cor_eixos)
+        ax.set_ylabel("Média ± DP entre as seeds", color=cor_eixos)
+        ax.set_xticks(resumo["k"])
+        ax.margins(y=0.12)  # folga em cima e embaixo, para o círculo e o texto não encostarem na borda
+        ax.tick_params(colors=cor_eixos)
+        ax.grid(color=cor_grade, linewidth=0.8)
+        ax.set_axisbelow(True)
+
+        # Sem as bordas de cima e da direita
+        ax.spines["top"].set_visible(False)
+        ax.spines["right"].set_visible(False)
+
+    plt.tight_layout()
+
+    # Salva sem fechar a figura (o salvar_plot fecha), para ela ainda poder ser exibida
+    if salvar:
+        salvar_visualizacao(fig, nome)
+
+    if plot:
+        plt.show()
+    else:
+        plt.close(fig)
+
+
+# %% [markdown]
 # # Todas as Visualizações
 
 # %%

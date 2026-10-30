@@ -324,6 +324,146 @@ def knn_regressor(df, variaveis=None, n_blocos=5, embaralhar=False):
 
 
 # %% [markdown]
+# # K-Means - Escolha do número de grupos (k)
+
+# %%
+def selecao_k(df, variaveis=None, k_min=2, k_max=10, n_seeds=30, verbose=False):
+    """
+    Testa quantidades de grupos (k) para o K-Means com três critérios: a inércia
+    (método do cotovelo), o coeficiente de silhueta e o índice de Calinski-Harabasz.
+    Usa o mesmo espaço da detecção de outliers (detect_outliers_pca_kmeans): os meses
+    completos, padronizados e reduzidos por PCA (95% da variância).
+    Cada k roda com n_seeds seeds, porque a posição inicial dos centros pode mudar os grupos.
+    A silhueta decide o k; o cotovelo e o Calinski-Harabasz confirmam.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame de interesse.
+    variaveis : list, optional
+        Lista com nomes das colunas identificadas como variáveis de df. Se None, usa todas
+        as colunas de df que não são metadados (separar_colunas), by default None
+    k_min : int, optional
+        Menor quantidade de grupos testada, by default 2
+    k_max : int, optional
+        Maior quantidade de grupos testada, by default 10
+    n_seeds : int, optional
+        Número de seeds do K-Means (random_state de 0 a n_seeds - 1), by default 30
+    verbose : bool, optional
+        Rodar a função exibe (print) o k apontado por cada critério, by default False
+
+    Returns
+    -------
+    rodadas : pd.DataFrame
+        Uma linha por rodada (k, seed), com a inércia, a silhueta e o Calinski-Harabasz.
+    resumo : pd.DataFrame
+        Uma linha por k, com a média e o desvio padrão de cada critério entre as seeds,
+        e três colunas True/False que marcam o k apontado por cada critério
+        (indicado_silhueta, indicado_cotovelo, indicado_calinski_harabasz).
+        Se o kneed não achar cotovelo, indicado_cotovelo fica False em todas as linhas.
+    k_escolhido : int
+        O k com a maior silhueta média.
+    """
+    # Bibliotecas
+    import pandas as pd
+    from sklearn.cluster import KMeans
+    from sklearn.preprocessing import StandardScaler
+    from sklearn.decomposition import PCA
+    from sklearn.metrics import silhouette_score, calinski_harabasz_score
+    from kneed import KneeLocator
+
+    if variaveis is None:
+        from pcj.utils import separar_colunas
+        _, variaveis = separar_colunas(df)
+
+    # 1. O PCA e o K-Means não aceitam NaN: só os meses completos entram
+    X_nonan = df[variaveis].dropna(axis=0, how='any')
+
+    # 2. Padronização: sem ela, as variáveis de valores grandes dominariam as distâncias
+    X_scaled = StandardScaler().fit_transform(X_nonan)
+
+    # 3. Componentes principais que explicam 95% da variância (como na detecção de outliers)
+    X_pca = PCA(n_components=0.95).fit_transform(X_scaled)
+
+    # 4. Cada k roda com cada seed, e cada rodada vira uma linha da tabela
+    linhas = []
+
+    for k in range(k_min, k_max + 1):
+        for seed in range(n_seeds):
+            kmeans = KMeans(n_clusters=k, random_state=seed)
+            grupos = kmeans.fit_predict(X_pca)
+
+            linhas.append({
+                "k": k,
+                "seed": seed,
+                # Inércia: soma dos quadrados das distâncias de cada mês ao centro do seu grupo (cai sempre que k aumenta)
+                "inercia": kmeans.inertia_,
+                # Silhueta: de -1 a 1. Quanto maior, mais cada mês está perto do próprio grupo e longe do grupo vizinho
+                "silhueta": silhouette_score(X_pca, grupos),
+                # Calinski-Harabasz: dispersão entre os grupos ÷ dispersão dentro deles. Quanto maior, melhor
+                "calinski_harabasz": calinski_harabasz_score(X_pca, grupos),
+            })
+
+    rodadas = pd.DataFrame(linhas)
+
+    # 5. Resumo: média e desvio padrão de cada critério entre as seeds, para cada k.
+    # O .std() do pandas usa ddof=1 (desvio padrão da amostra), como no experimento A
+    linhas = []
+
+    for k in range(k_min, k_max + 1):
+        rodadas_k = rodadas[rodadas["k"] == k]
+
+        linhas.append({
+            "k": k,
+            "inercia_media": rodadas_k["inercia"].mean(),
+            "inercia_dp": rodadas_k["inercia"].std(),
+            "silhueta_media": rodadas_k["silhueta"].mean(),
+            "silhueta_dp": rodadas_k["silhueta"].std(),
+            "calinski_harabasz_media": rodadas_k["calinski_harabasz"].mean(),
+            "calinski_harabasz_dp": rodadas_k["calinski_harabasz"].std(),
+        })
+
+    resumo = pd.DataFrame(linhas)
+
+    # 6. k apontado por cada critério
+    # Silhueta e Calinski-Harabasz: o k com a maior média
+    k_silhueta = int(resumo.loc[resumo["silhueta_media"].idxmax(), "k"])
+    k_calinski = int(resumo.loc[resumo["calinski_harabasz_media"].idxmax(), "k"])
+
+    # Cotovelo: o k em que a inércia média para de cair rápido (algoritmo Kneedle, biblioteca kneed).
+    # A curva da inércia é convexa e decrescente. Se não houver cotovelo, o kneed devolve None
+    cotovelo = KneeLocator(resumo["k"], resumo["inercia_media"], curve="convex", direction="decreasing")
+    k_cotovelo = cotovelo.knee
+
+    if k_cotovelo is not None:
+        k_cotovelo = int(k_cotovelo)
+
+    # Colunas True/False: True só na linha do k apontado (com k_cotovelo = None, a comparação dá False em todas)
+    resumo["indicado_silhueta"] = resumo["k"] == k_silhueta
+    resumo["indicado_cotovelo"] = resumo["k"] == k_cotovelo
+    resumo["indicado_calinski_harabasz"] = resumo["k"] == k_calinski
+
+    # 7. A silhueta decide; o cotovelo e o Calinski-Harabasz confirmam
+    k_escolhido = k_silhueta
+
+    if verbose:
+        print(f"K-Means em {len(X_nonan)} meses completos ({len(df) - len(X_nonan)} com NaN, não avaliados); "
+              f"{X_pca.shape[1]} componentes principais")
+        print(f"k de {k_min} a {k_max} x {n_seeds} seeds = {len(rodadas)} rodadas")
+        print(f"Silhueta (maior média): k = {k_silhueta}")
+
+        if k_cotovelo is None:
+            print("Cotovelo da inércia (kneed): sem cotovelo")
+        else:
+            print(f"Cotovelo da inércia (kneed): k = {k_cotovelo}")
+
+        print(f"Calinski-Harabasz (maior média): k = {k_calinski}")
+        print(f"k escolhido (a silhueta decide): {k_escolhido}")
+
+    return rodadas, resumo, k_escolhido
+
+
+# %% [markdown]
 # # K-Means - Clustering
 
 # %%

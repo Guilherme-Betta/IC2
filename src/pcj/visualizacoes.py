@@ -505,87 +505,352 @@ def correlacao(df, method='pearson', plot=False, salvar=True):
 # # K-Means
 
 # %%
-def k_means_clusters(df, variaveis=None, 
-                     n_clusters=10, pca=False, norm=False):
+def k_means_clusters(df, tabela, variaveis=None, eixos=None, nome="k_means_clusters", plot=False, salvar=True):
     """
-    Gera figuras da base de dados, colorida de acordo com os agrupamentos identificados
-    pelo algoritmo K-Means, para cada quantidade de clusters estabelecida.
+    Gera a figura dos grupos formados pelo K-Means (função modelos_ML.k_means): cada
+    mês é um ponto, com a cor e o marcador do seu grupo. Os grupos vêm prontos da
+    tabela da k_means; a função só escolhe os eixos da figura (o "ângulo" da foto),
+    então trocar os eixos não muda os grupos.
 
     Parameters
     ----------
     df : pd.DataFrame
-        DataFrame de interesse
+        O mesmo DataFrame usado na k_means.
+    tabela : pd.DataFrame
+        Primeiro valor devolvido pela k_means: uma linha por mês, com a coluna "grupo"
+        (<NA> nos meses não agrupados, que ficam fora da figura).
     variaveis : list, optional
-        Lista contendo os nomes das colunas identificadas como variaveis de df, by default False
-    n_clusters : int, optional
-         Define o número máximo de clusters que será testado pelo modelo, by default 10
-    pca : bool, optional
-        Se "True", gerará figuras que utilizam os dados pós redução de dimensionalidade PCA, by default False
-    norm : bool, optional
-        Se "True", gerará figuras que utilizam os dados pós normalização dos dados brutos, by default False
-        Se tanto "pca" quanto "norm" forem "False", as figuras usam os dados brutos de df
-    """    
-    from sklearn.cluster import KMeans
+        Lista com nomes das colunas identificadas como variaveis de df, by default None
+    eixos : tuple of str, optional
+        Duas variáveis de df para os eixos x e y (ex.: ("TURB.", "Cond.")): fácil de ler,
+        mas mostra só 2 das variáveis. Se None, usa os dois primeiros componentes
+        principais (PC1 e PC2), no mesmo espaço da k_means, com a fração da variação
+        que cada um guarda no rótulo, by default None
+    nome : str, default "k_means_clusters"
+        Nome base do arquivo salvo.
+    plot : bool, default False
+        Determina se o código deve gerar visualizações
+        ao ser carregado.
+    salvar : bool, default True
+        Determina se o código deve salvar as visualizações
+        ao ser carregado.
 
-    n_clusters_list = list(range(2, int(n_clusters) + 1))
+    Returns
+    -------
+    None
 
-    X = df.copy()
-
-    if not variaveis:
+    Raises
+    ------
+    ValueError
+        Se a tabela tiver mais grupos do que a figura consegue distinguir (8).
+    """
+    if variaveis is None:
         from pcj.utils import separar_colunas
-        metadados, variaveis = separar_colunas(df)
+        _, variaveis = separar_colunas(df)
 
-    # Eliminar células vazias
-    X = X[variaveis].dropna(axis=0, how='any')
-    
-    # Salvar o Index do DataFrame sem células vazias numa variável
-    idx_nonan = X.index
+    # Cores e marcadores em ordem fixa (grupo 0, 1, 2...). O marcador diferente ajuda quem não distingue as cores
+    cores = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300", "#6250d6", "#e34948"]
+    marcadores = ["o", "^", "s", "D", "v", "P", "X", "*"]
+    cor_texto = "#0b0b0b"
+    cor_eixos = "#898781"
+    cor_grade = "#e1e0d9"
 
-    # Trasnformar em numpy array (a sintaxe de dois índices ([:, 0]) não é válida para pd.DataFrames. O pandas lança InvalidIndexError.)
+    # Só os meses agrupados (os outros têm grupo <NA>)
+    grupos = tabela["grupo"].dropna()
+    lista_grupos = sorted(grupos.unique())
 
-    X = X.to_numpy()
+    if len(lista_grupos) > len(cores):
+        raise ValueError(f"A figura distingue até {len(cores)} grupos; a tabela tem {len(lista_grupos)}.")
 
-    # Normalização dos dados. É um pré requisito para o PCA funcionar
-    if norm or pca:
+    # 1. Coordenadas de cada mês nos eixos da figura
+    if eixos is None:
         from sklearn.preprocessing import StandardScaler
+        from sklearn.decomposition import PCA
+
+        # O mesmo espaço da k_means: os meses agrupados, padronizados e reduzidos por PCA (95% da variância)
+        X_nonan = df.loc[grupos.index, variaveis]
 
         scaler = StandardScaler()   # Coloca todas as variáveis na mesma escala, com média = 0 e desvio padrão = 1.
-        X = scaler.fit_transform(X)
+        X_scaled = scaler.fit_transform(X_nonan)
 
-    # Redução da dimensionalidade
-    if pca:
-        from sklearn.decomposition import PCA
         pca = PCA(n_components=0.95, # Mantém 95% da variância
                 random_state=0)
-        X = pca.fit_transform(X)
+        X_pca = pca.fit_transform(X_scaled)
 
-    # Geração de figuras
-    fig, axs = plt.subplots(
-        1,
-        len(n_clusters_list),
-        figsize=(20, 10)
-    )
+        # Os dois primeiros componentes são os que guardam mais variação: o melhor "ângulo" para uma figura plana
+        x = X_pca[:, 0]
+        y = X_pca[:, 1]
 
-    axs = axs.T
+        variacao = pca.explained_variance_ratio_
+        rotulo_x = f"PC1 ({variacao[0]:.0%} da variação)"
+        rotulo_y = f"PC2 ({variacao[1]:.0%} da variação)"
+    else:
+        x = df.loc[grupos.index, eixos[0]].to_numpy()
+        y = df.loc[grupos.index, eixos[1]].to_numpy()
 
-    for i, n_clusters in enumerate(n_clusters_list):
-        kmeans = KMeans(n_clusters=n_clusters, random_state=0, n_init="auto")
-        kmeans.fit(X)
-        centers = kmeans.cluster_centers_
+        rotulo_x = eixos[0]
+        rotulo_y = eixos[1]
 
-        axs[i].scatter(X[:, 0], X[:, 1], s=10, c=kmeans.labels_)
-        axs[i].scatter(centers[:, 0], centers[:, 1], c="r", s=20)
+    # 2. Figura: um conjunto de pontos por grupo
+    fig, ax = plt.subplots(figsize=(8, 6))
 
-        axs[i].set_title(f"{kmeans} : {n_clusters} clusters")
+    for i, grupo in enumerate(lista_grupos):
+        # True nos meses do grupo (to_numpy(dtype=bool): o grupo é "Int64", e a comparação devolve o booleano do pandas)
+        no_grupo = (grupos == grupo).to_numpy(dtype=bool)
 
-    for ax in axs.flat:
-        ax.label_outer()
-        ax.set_xticks([])
-        ax.set_yticks([])
+        ax.scatter(x[no_grupo], y[no_grupo], s=45, color=cores[i], marker=marcadores[i],
+                   edgecolors="white", linewidths=0.6, label=f"grupo {grupo} ({no_grupo.sum()} meses)")
+
+    # Títulos, eixos e grade
+    ax.set_title(f"Grupos do K-Means (k = {len(lista_grupos)})", color=cor_texto)
+    ax.set_xlabel(rotulo_x, color=cor_eixos)
+    ax.set_ylabel(rotulo_y, color=cor_eixos)
+    ax.legend(frameon=False)
+    ax.tick_params(colors=cor_eixos)
+    ax.grid(color=cor_grade, linewidth=0.8)
+    ax.set_axisbelow(True)
+
+    # Sem as bordas de cima e da direita
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
 
     plt.tight_layout()
 
-    plt.show()
+    # Salva sem fechar a figura (o salvar_plot fecha), para ela ainda poder ser exibida
+    if salvar:
+        salvar_visualizacao(fig, nome)
+
+    if plot:
+        plt.show()
+    else:
+        plt.close(fig)
+
+
+# %% [markdown]
+# # K-Means - Escolha do número de grupos (k)
+
+# %%
+def curvas_selecao_k(resumo, nome="selecao_k", plot=False, salvar=True):
+    """
+    Gera a figura dos três critérios de escolha de k (saída da função
+    modelos_ML.selecao_k): um painel para a inércia (método do cotovelo), um para a
+    silhueta e um para o Calinski-Harabasz. Cada ponto é a média entre as seeds, e a
+    barra de erro é o desvio padrão. O k apontado por cada critério é marcado com um
+    círculo vazado e um texto.
+
+    Parameters
+    ----------
+    resumo : pd.DataFrame
+        Segundo valor devolvido por selecao_k: uma linha por k, com as colunas
+        "<critério>_media", "<critério>_dp" e "indicado_<critério>".
+    nome : str, default "selecao_k"
+        Nome base do arquivo salvo (ex.: "selecao_k_tratada", para separar as bases).
+    plot : bool, default False
+        Determina se o código deve gerar visualizações
+        ao ser carregado.
+    salvar : bool, default True
+        Determina se o código deve salvar as visualizações
+        ao ser carregado.
+
+    Returns
+    -------
+    None
+    """
+    # Cores: série em azul; marcação do k e textos em tons neutros
+    cor_serie = "#2a78d6"
+    cor_texto = "#0b0b0b"
+    cor_eixos = "#898781"
+    cor_grade = "#e1e0d9"
+
+    # Um painel por critério: (critério, título do painel, coluna que marca o k, rótulo da marcação)
+    criterios = [
+        ("inercia", "Inércia (método do cotovelo)", "indicado_cotovelo", "cotovelo"),
+        ("silhueta", "Coeficiente de silhueta", "indicado_silhueta", "maior média"),
+        ("calinski_harabasz", "Índice de Calinski-Harabasz", "indicado_calinski_harabasz", "maior média"),
+    ]
+
+    fig, axs = plt.subplots(1, 3, figsize=(16, 4.5))
+
+    for i, (criterio, titulo, indicado, rotulo) in enumerate(criterios):
+        ax = axs[i]
+
+        # Média de cada k, com o desvio padrão entre as seeds como barra de erro
+        ax.errorbar(
+            resumo["k"],
+            resumo[f"{criterio}_media"],
+            yerr=resumo[f"{criterio}_dp"],
+            color=cor_serie,
+            linewidth=2,
+            marker="o",
+            markersize=6,
+            capsize=3,
+        )
+
+        # k apontado pelo critério (a linha do resumo com True na coluna "indicado_...")
+        linha = resumo[resumo[indicado]]
+
+        if len(linha) == 0:
+            # Só acontece no cotovelo: o kneed não achou um ponto de inflexão
+            texto = "sem cotovelo"
+        else:
+            k_indicado = linha["k"].iloc[0]
+            valor = linha[f"{criterio}_media"].iloc[0]
+            texto = f"{rotulo}: k = {k_indicado}"
+
+            # Círculo vazado em volta do ponto do k indicado
+            ax.scatter(k_indicado, valor, s=250, facecolors="none", edgecolors=cor_texto, linewidths=1.5, zorder=3)
+
+        # Texto no canto de cima, à direita (transform=ax.transAxes: posição em fração do painel, de 0 a 1),
+        # com fundo branco para não se misturar às barras de erro
+        ax.text(0.97, 0.95, texto, transform=ax.transAxes, ha="right", va="top", color=cor_texto,
+                bbox={"facecolor": "white", "edgecolor": cor_grade, "boxstyle": "round,pad=0.3"})
+
+        # Títulos, eixos e grade
+        ax.set_title(titulo, color=cor_texto)
+        ax.set_xlabel("Número de grupos (k)", color=cor_eixos)
+        ax.set_ylabel("Média ± DP entre as seeds", color=cor_eixos)
+        ax.set_xticks(resumo["k"])
+        ax.margins(y=0.12)  # folga em cima e embaixo, para o círculo e o texto não encostarem na borda
+        ax.tick_params(colors=cor_eixos)
+        ax.grid(color=cor_grade, linewidth=0.8)
+        ax.set_axisbelow(True)
+
+        # Sem as bordas de cima e da direita
+        ax.spines["top"].set_visible(False)
+        ax.spines["right"].set_visible(False)
+
+    plt.tight_layout()
+
+    # Salva sem fechar a figura (o salvar_plot fecha), para ela ainda poder ser exibida
+    if salvar:
+        salvar_visualizacao(fig, nome)
+
+    if plot:
+        plt.show()
+    else:
+        plt.close(fig)
+
+
+# %% [markdown]
+# # Validação das imputações
+
+# %%
+def validacao_imputacoes(resumo, metrica="rmse", nome=None, plot=False, salvar=True):
+    """
+    Gera a figura de validação das imputações do experimento A: um painel por
+    variável, na unidade dela, com uma barra por método de imputação. A altura da
+    barra é a métrica calculada juntando as células de todas as rodadas
+    (metricas_avaliacao.metricas_juntando), e a barra de erro é o desvio padrão
+    da métrica entre as rodadas.
+
+    Parameters
+    ----------
+    resumo : pd.DataFrame
+        Uma linha por método × variável, com as colunas "metodo", "pct_faltantes",
+        "variavel", "<metrica>" e "<metrica>_dp" (o resumo do notebook
+        aplicacoes/avaliacoes_imputacoes, gravado na aba "resumo" do
+        avaliacao_imputacoes_A.xlsx).
+    metrica : str, default "rmse"
+        "rmse" ou "mae". O R² fica de fora porque não tem DP entre as rodadas.
+    nome : str, optional
+        Nome base do arquivo salvo. Se None, usa "validacao_imputacoes_<metrica>", by default None
+    plot : bool, default False
+        Determina se o código deve gerar visualizações
+        ao ser carregado.
+    salvar : bool, default True
+        Determina se o código deve salvar as visualizações
+        ao ser carregado.
+
+    Returns
+    -------
+    None
+
+    Raises
+    ------
+    ValueError
+        Se a métrica não for "rmse" nem "mae".
+    """
+    if metrica not in ["rmse", "mae"]:
+        raise ValueError(f'A métrica deve ser "rmse" ou "mae" (o R² não tem DP entre as rodadas); veio "{metrica}".')
+
+    if nome is None:
+        nome = f"validacao_imputacoes_{metrica}"
+
+    # Cores por método (as mesmas da curvas_selecao_k e da k_means_clusters); textos e eixos em tons neutros
+    cores = {"media": "#2a78d6", "mediana": "#eb6834", "knn": "#1baf7a"}
+    nomes_metodos = {"media": "Média", "mediana": "Mediana", "knn": "KNN"}
+    cor_texto = "#0b0b0b"
+    cor_eixos = "#898781"
+    cor_grade = "#e1e0d9"
+    cor_erro = "#52514e"
+
+    # 1. Métodos e variáveis na ordem em que aparecem no resumo (a ordem da base)
+    metodos = list(resumo["metodo"].unique())
+    variaveis = list(resumo["variavel"].unique())
+
+    # 2. Grade de painéis: 4 colunas e quantas linhas forem precisas
+    #    (squeeze=False: axs é sempre uma tabela de painéis, mesmo com uma linha só)
+    n_colunas = 4
+    n_linhas = math.ceil(len(variaveis) / n_colunas)
+    fig, axs = plt.subplots(n_linhas, n_colunas, figsize=(12, 2.6 * n_linhas), squeeze=False)
+
+    for n, variavel in enumerate(variaveis):
+        # Linha e coluna do painel desta variável (// é a divisão inteira; % é o resto)
+        ax = axs[n // n_colunas, n % n_colunas]
+
+        # Uma barra por método, com o DP entre as rodadas como barra de erro
+        for j, metodo in enumerate(metodos):
+            linha = resumo[(resumo["metodo"] == metodo) & (resumo["variavel"] == variavel)].iloc[0]
+
+            ax.bar(
+                j,
+                linha[metrica],
+                yerr=linha[f"{metrica}_dp"],
+                width=0.7,
+                color=cores[metodo],
+                capsize=3,
+                error_kw={"ecolor": cor_erro, "elinewidth": 1},
+            )
+
+        # Título, eixos e grade. Os métodos não aparecem no eixo x: a cor diz qual é (ver a legenda)
+        ax.set_title(variavel, color=cor_texto)
+        ax.set_xticks([])
+        ax.tick_params(colors=cor_eixos)
+        ax.grid(axis="y", color=cor_grade, linewidth=0.8)
+        ax.set_axisbelow(True)
+
+        # Sem as bordas de cima e da direita
+        ax.spines["top"].set_visible(False)
+        ax.spines["right"].set_visible(False)
+
+    # 3. Painéis que sobram na grade (quando o número de variáveis não é múltiplo de 4) ficam em branco
+    for n in range(len(variaveis), n_linhas * n_colunas):
+        axs[n // n_colunas, n % n_colunas].axis("off")
+
+    # 4. Uma legenda para a figura toda, com a taxa de falhas simulada de cada método (lida do resumo).
+    #    Os quadrados (Rectangle) só servem para desenhar a cor de cada método na legenda
+    quadrados = []
+    rotulos = []
+    for metodo in metodos:
+        pct = resumo.loc[resumo["metodo"] == metodo, "pct_faltantes"].iloc[0]
+        quadrados.append(plt.Rectangle((0, 0), 1, 1, color=cores[metodo]))
+        rotulos.append(f"{nomes_metodos[metodo]} ({pct:.0%} de falhas)")
+
+    fig.suptitle(f"{metrica.upper()} das imputações ± DP entre as rodadas (na unidade de cada variável)",
+                 color=cor_texto, y=0.995)
+    fig.legend(quadrados, rotulos, loc="upper center", bbox_to_anchor=(0.5, 0.965), ncol=len(metodos), frameon=False)
+
+    # rect deixa livre a faixa de cima da figura, onde ficam o título e a legenda
+    plt.tight_layout(rect=(0, 0, 1, 0.93))
+
+    # Salva sem fechar a figura (o salvar_plot fecha), para ela ainda poder ser exibida
+    if salvar:
+        salvar_visualizacao(fig, nome)
+
+    if plot:
+        plt.show()
+    else:
+        plt.close(fig)
 
 
 # %% [markdown]

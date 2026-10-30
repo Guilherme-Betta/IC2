@@ -560,7 +560,7 @@ def detect_outliers_pca_kmeans(df, variaveis=None, n_clusters=3,
 # %%
 def detect_outliers_ensemble(df, variaveis=None, metodos=("IF", "LOF", "KNN"), regra="maioria",
                              contaminacoes=(0.05, 0.06, 0.07, 0.08, 0.09, 0.10), limiar=0.5, n_seeds=30,
-                             limiar_media=0.5, coluna_data="Data", verbose=False):
+                             n_clusters=3, limiar_media=0.5, coluna_data="Data", verbose=False):
     """
     Combina detectores de outliers de aprendizado de máquina (Isolation Forest,
     LOF, KNN e, como opção, PCA + K-Means) num ensemble. Cada detector vota com o
@@ -592,6 +592,9 @@ def detect_outliers_ensemble(df, variaveis=None, metodos=("IF", "LOF", "KNN"), r
         Limiar de consenso de cada detector (fração mínima de rodadas).
     n_seeds : int, default 30
         Número de seeds do Isolation Forest e do K-Means.
+    n_clusters : int, default 3
+        Número de grupos do K-Means (só usado quando "K-Means" está em metodos).
+        Ver pcj.modelos_ML.selecao_k para a escolha.
     limiar_media : float, default 0.5
         Só para regra="media": média mínima das frequências para marcar o mês.
     coluna_data : str, default "Data"
@@ -631,7 +634,8 @@ def detect_outliers_ensemble(df, variaveis=None, metodos=("IF", "LOF", "KNN"), r
         elif metodo == "KNN":
             frequencia, consenso = detect_outliers_knn(df, variaveis, contaminacoes=contaminacoes, limiar=limiar)
         elif metodo == "K-Means":
-            frequencia, consenso = detect_outliers_pca_kmeans(df, variaveis, contaminacoes=contaminacoes,
+            frequencia, consenso = detect_outliers_pca_kmeans(df, variaveis, n_clusters=n_clusters,
+                                                              contaminacoes=contaminacoes,
                                                               n_seeds=n_seeds, limiar=limiar)
         else:
             raise ValueError(f"Método desconhecido: {metodo}. Use 'IF', 'LOF', 'KNN' ou 'K-Means'.")

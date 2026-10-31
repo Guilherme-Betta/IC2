@@ -268,7 +268,8 @@ def random_forest(df, variaveis=None, var_alvo='pH', n_blocos=5, embaralhar=Fals
 # # KNN Regressor
 
 # %%
-def knn_regressor(df, variaveis=None, n_blocos=5, embaralhar=False):
+def knn_regressor(df, variaveis=None, n_blocos=5, embaralhar=False,
+                  meses_avaliados=None, devolver_previsoes=False, coluna_data="Data"):
     """
     Roda um algoritmo de previsão de valores de uma determinada coluna.
     Roda esse algoritmo para todas as colunas de variáveis da base de dados.
@@ -277,7 +278,8 @@ def knn_regressor(df, variaveis=None, n_blocos=5, embaralhar=False):
     Em cada bloco, utiliza GridSearchCV para determinar a melhor parametrização do KNN,
     usando só os blocos de treino.
     Avalia o desempenho do modelo com as métricas de avaliação "MAE", "RMSE" e "R²",
-    juntando as previsões de todos os blocos.
+    juntando as previsões de todos os blocos. O modelo trabalha com as variáveis normalizadas
+    (0 a 1); antes do RMSE e do MAE, as previsões voltam para a unidade original da variável.
 
     Parameters
     ----------
@@ -291,6 +293,17 @@ def knn_regressor(df, variaveis=None, n_blocos=5, embaralhar=False):
         Se False, cada bloco é um período de meses seguidos (a base está em ordem de data),
         e o modelo é testado em anos que não viu. Se True, os meses são sorteados para os
         blocos (KFold aleatório, random_state=42), by default False
+    meses_avaliados : list, optional
+        Rótulos (índice de df) dos meses completos que são testados e entram nas métricas.
+        Os outros meses completos entram no treino de todos os blocos, mas nunca são
+        previstos. Serve para comparar duas bases com a mesma prova: os blocos são cortados
+        só nos meses avaliados, na ordem das linhas. Se None, todos os meses completos são
+        avaliados, by default None
+    devolver_previsoes : bool, optional
+        Se True, devolve também a previsão de cada mês avaliado, by default False
+    coluna_data : str, optional
+        Nome da coluna de df com a data de cada mês (usada na tabela de previsões),
+        by default "Data"
 
     Returns
     -------
@@ -298,10 +311,20 @@ def knn_regressor(df, variaveis=None, n_blocos=5, embaralhar=False):
         Uma linha por variável alvo, com as colunas:
         - variavel: variável prevista
         - rmse, mae, r2: métricas juntando as previsões de todos os blocos
-          (cada mês é previsto uma vez, quando o bloco dele é o de teste)
+          (cada mês avaliado é previsto uma vez, quando o bloco dele é o de teste).
+          RMSE e MAE na unidade original da variável; o R² não tem unidade
         - r2_blocos: lista com o R² de cada bloco
         - melhores_parametros: parâmetros escolhidos pelo GridSearchCV no maior número de blocos
         - n_blocos_parametros: em quantos blocos esses parâmetros foram escolhidos
+    previsoes : pd.DataFrame, optional
+        Apenas se devolver_previsoes=True. Uma linha por mês avaliado e variável alvo, com
+        as colunas <coluna_data>, variavel, bloco (1 a n_blocos), verdadeiro e previsto
+        (na unidade original).
+
+    Raises
+    ------
+    ValueError
+        Se algum mês de meses_avaliados não for um mês completo (sem NaN) de df.
     """
     X = df.dropna().copy()
 
@@ -328,6 +351,24 @@ def knn_regressor(df, variaveis=None, n_blocos=5, embaralhar=False):
 
     limpos_norm = pd.DataFrame(limpos_norm, columns=colunas)
 
+    # Mínimo e amplitude (máximo - mínimo) de cada variável, os mesmos que o MinMaxScaler usou.
+    # Servem para voltar as previsões à unidade original: valor = normalizado × amplitude + mínimo
+    minimo = X[variaveis].min()
+    amplitude = X[variaveis].max() - X[variaveis].min()
+
+    # Meses avaliados (testados e medidos) e meses extras (sempre no treino), pela posição em X
+    # (limpos_norm tem as mesmas linhas, na mesma ordem)
+    if meses_avaliados is None:
+        avaliados = list(range(len(X)))
+        extras = []
+    else:
+        # Um mês com NaN não serve: ele nem está em X
+        if not pd.Index(meses_avaliados).isin(X.index).all():
+            raise ValueError("meses_avaliados só pode ter meses completos (sem NaN) de df.")
+        eh_avaliado = X.index.isin(meses_avaliados)
+        avaliados = [p for p in range(len(X)) if eh_avaliado[p]]
+        extras = [p for p in range(len(X)) if not eh_avaliado[p]]
+
     # 3) Validação cruzada e grade de hiperparâmetros
 
     # Divisão dos meses em blocos. Sem embaralhar, o KFold corta a base na ordem das linhas
@@ -349,6 +390,9 @@ def knn_regressor(df, variaveis=None, n_blocos=5, embaralhar=False):
     # Lista que será convertida em DataFrame, com as métricas de todas as variáveis
     linhas = []
 
+    # Previsão de cada mês avaliado, de todas as variáveis (usada só se devolver_previsoes=True)
+    linhas_previsoes = []
+
     # 4) Loop
 
     # Selecionará cada variável como variável alvo
@@ -361,11 +405,18 @@ def knn_regressor(df, variaveis=None, n_blocos=5, embaralhar=False):
         y_pred = pd.Series(index=y.index, dtype=float)
         r2_blocos = []
         parametros_blocos = []
+        bloco = 0
 
-        # Cada volta do laço usa um bloco como teste e os outros como treino
-        for treino, teste in kfold.split(x):
-            x_train, x_test = x.iloc[treino], x.iloc[teste]
-            y_train, y_test = y.iloc[treino], y.iloc[teste]
+        # Cada volta do laço usa um bloco como teste e os outros como treino.
+        # Os blocos são cortados só nos meses avaliados: o KFold devolve posições na lista avaliados,
+        # que são convertidas em posições de x. Os meses extras entram sempre no treino
+        for treino, teste in kfold.split(avaliados):
+            bloco = bloco + 1
+            pos_teste = [avaliados[i] for i in teste]
+            pos_treino = sorted([avaliados[i] for i in treino] + extras)
+
+            x_train, x_test = x.iloc[pos_treino], x.iloc[pos_teste]
+            y_train, y_test = y.iloc[pos_treino], y.iloc[pos_teste]
 
             # Executando o GridSearchCV só com os blocos de treino.
             # O cv=5 é uma segunda validação cruzada, dentro do treino, que escolhe os parâmetros
@@ -382,9 +433,20 @@ def knn_regressor(df, variaveis=None, n_blocos=5, embaralhar=False):
             best_knn.fit(x_train, y_train)
 
             # Previsão do bloco de teste
-            y_pred.iloc[teste] = best_knn.predict(x_test)
+            y_pred.iloc[pos_teste] = best_knn.predict(x_test)
 
-            r2_blocos.append(r2_score(y_test, y_pred.iloc[teste]))
+            r2_blocos.append(r2_score(y_test, y_pred.iloc[pos_teste]))
+
+            # Previsão de cada mês do bloco, na unidade original, para a tabela de previsões
+            if devolver_previsoes:
+                for p in pos_teste:
+                    linhas_previsoes.append({
+                        coluna_data: X[coluna_data].iloc[p],
+                        "variavel": target_col,
+                        "bloco": bloco,
+                        "verdadeiro": X[target_col].iloc[p],
+                        "previsto": y_pred.iloc[p] * amplitude[target_col] + minimo[target_col]
+                    })
 
             # str transforma o dicionário de parâmetros em texto, para contar quantas vezes ele se repete
             parametros_blocos.append(str(grid_search.best_params_))
@@ -392,16 +454,24 @@ def knn_regressor(df, variaveis=None, n_blocos=5, embaralhar=False):
         # Parâmetros escolhidos no maior número de blocos (value_counts conta e ordena do mais frequente)
         contagem = pd.Series(parametros_blocos).value_counts()
 
+        # Volta à unidade original, só nos meses avaliados: valor = normalizado × amplitude + mínimo.
+        # Os valores verdadeiros vêm direto de X, que já está na unidade original
+        y_aval = X[target_col].iloc[avaliados]
+        pred_aval = y_pred.iloc[avaliados] * amplitude[target_col] + minimo[target_col]
+
         # Avaliação do modelo com Métricas, juntando as previsões de todos os blocos
         linhas.append({
             "variavel": target_col,
-            "rmse": root_mean_squared_error(y, y_pred),
-            "mae": mean_absolute_error(y, y_pred),
-            "r2": r2_score(y, y_pred),
+            "rmse": root_mean_squared_error(y_aval, pred_aval),
+            "mae": mean_absolute_error(y_aval, pred_aval),
+            "r2": r2_score(y_aval, pred_aval),
             "r2_blocos": [round(r, 3) for r in r2_blocos],
             "melhores_parametros": contagem.index[0],
             "n_blocos_parametros": contagem.iloc[0]
         })
+
+    if devolver_previsoes:
+        return pd.DataFrame(linhas), pd.DataFrame(linhas_previsoes)
 
     return pd.DataFrame(linhas)
 

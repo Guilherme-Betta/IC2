@@ -93,14 +93,15 @@ def isolation_forest(
 # # Random Forest - Regressão
 
 # %%
-def random_forest(df, variaveis=None, var_alvo='pH', n_blocos=5, embaralhar=False):
+def random_forest(df, variaveis=None, var_alvo='pH', n_blocos=5, embaralhar=False,
+                  meses_avaliados=None, devolver_previsoes=False, coluna_data="Data", verbose=False):
     """
     Roda um algoritmo de regressão com o modelo Random Forest.
     Avalia o modelo com validação cruzada: divide os meses em n_blocos, e cada bloco é testado
     uma vez, com o modelo treinado nos outros blocos.
     Testa a qualidade das previsões do modelo com as métricas de avaliação "MAE", "RMSE" e "R²",
     juntando as previsões de todos os blocos, e com o R² de cada bloco.
-    Imprime esses resultados no final.
+    Devolve esses resultados numa tabela (com verbose=True, também os imprime).
 
     Parameters
     ----------
@@ -116,6 +117,36 @@ def random_forest(df, variaveis=None, var_alvo='pH', n_blocos=5, embaralhar=Fals
         Se False, cada bloco é um período de meses seguidos (a base está em ordem de data),
         e o modelo é testado em anos que não viu. Se True, os meses são sorteados para os
         blocos (KFold aleatório, random_state=42), by default False
+    meses_avaliados : list, optional
+        Rótulos (índice de df) dos meses completos que são testados e entram nas métricas.
+        Os outros meses completos entram no treino de todos os blocos, mas nunca são
+        previstos. Serve para comparar duas bases com a mesma prova: os blocos são cortados
+        só nos meses avaliados, na ordem das linhas. Se None, todos os meses completos são
+        avaliados, by default None
+    devolver_previsoes : bool, optional
+        Se True, devolve também a previsão de cada mês avaliado, by default False
+    coluna_data : str, optional
+        Nome da coluna de df com a data de cada mês (usada na tabela de previsões),
+        by default "Data"
+    verbose : bool, optional
+        Se True, imprime as métricas e o R² de cada bloco, by default False
+
+    Returns
+    -------
+    resultado : pd.DataFrame
+        Uma linha, com as colunas:
+        - variavel: variável prevista (var_alvo)
+        - rmse, mae, r2: métricas juntando as previsões de todos os blocos
+          (cada mês avaliado é previsto uma vez, quando o bloco dele é o de teste)
+        - r2_blocos: lista com o R² de cada bloco
+    previsoes : pd.DataFrame, optional
+        Apenas se devolver_previsoes=True. Uma linha por mês avaliado, com as colunas
+        <coluna_data>, variavel, bloco (1 a n_blocos), verdadeiro e previsto.
+
+    Raises
+    ------
+    ValueError
+        Se algum mês de meses_avaliados não for um mês completo (sem NaN) de df.
     """    
     X = df.copy()
 
@@ -146,14 +177,34 @@ def random_forest(df, variaveis=None, var_alvo='pH', n_blocos=5, embaralhar=Fals
     from sklearn.ensemble import RandomForestRegressor
     from sklearn.metrics import root_mean_squared_error, mean_absolute_error, r2_score
 
+    # Meses avaliados (testados e medidos) e meses extras (sempre no treino), pela posição em X_nonan
+    if meses_avaliados is None:
+        avaliados = list(range(len(X_nonan)))
+        extras = []
+    else:
+        # Um mês com NaN não serve: ele nem está em X_nonan
+        if not pd.Index(meses_avaliados).isin(X_nonan.index).all():
+            raise ValueError("meses_avaliados só pode ter meses completos (sem NaN) de df.")
+        eh_avaliado = X_nonan.index.isin(meses_avaliados)
+        avaliados = [p for p in range(len(X_nonan)) if eh_avaliado[p]]
+        extras = [p for p in range(len(X_nonan)) if not eh_avaliado[p]]
+
     # Previsão de cada mês, feita quando o bloco dele é o de teste
     y_pred = pd.Series(index=y.index, dtype=float)
     r2_blocos = []
+    linhas_previsoes = []
+    bloco = 0
 
-    # Cada volta do laço usa um bloco como teste e os outros como treino
-    for treino, teste in kfold.split(x):
-        x_train, x_test = x.iloc[treino], x.iloc[teste]
-        y_train, y_test = y.iloc[treino], y.iloc[teste]
+    # Cada volta do laço usa um bloco como teste e os outros como treino.
+    # Os blocos são cortados só nos meses avaliados: o KFold devolve posições na lista avaliados,
+    # que são convertidas em posições de x. Os meses extras entram sempre no treino
+    for treino, teste in kfold.split(avaliados):
+        bloco = bloco + 1
+        pos_teste = [avaliados[i] for i in teste]
+        pos_treino = sorted([avaliados[i] for i in treino] + extras)
+
+        x_train, x_test = x.iloc[pos_treino], x.iloc[pos_teste]
+        y_train, y_test = y.iloc[pos_treino], y.iloc[pos_teste]
 
         # Criando o modelo
         model = RandomForestRegressor(n_estimators=100,    # Copiando do tutorial
@@ -163,22 +214,54 @@ def random_forest(df, variaveis=None, var_alvo='pH', n_blocos=5, embaralhar=Fals
         model.fit(x_train, y_train)
 
         # Previsões do bloco de teste
-        y_pred.iloc[teste] = model.predict(x_test)
+        y_pred.iloc[pos_teste] = model.predict(x_test)
 
-        r2_blocos.append(r2_score(y_test, y_pred.iloc[teste]))
+        r2_blocos.append(r2_score(y_test, y_pred.iloc[pos_teste]))
 
-    # Avaliação do Desempenho, juntando as previsões de todos os blocos
-    print("RMSE:", root_mean_squared_error(y, y_pred))
-    print("MAE:", mean_absolute_error(y, y_pred))
-    print("r²:", r2_score(y, y_pred))
+        # Previsão de cada mês do bloco, para a tabela de previsões
+        if devolver_previsoes:
+            for p in pos_teste:
+                linhas_previsoes.append({
+                    coluna_data: X_nonan[coluna_data].iloc[p],
+                    "variavel": var_alvo,
+                    "bloco": bloco,
+                    "verdadeiro": y.iloc[p],
+                    "previsto": y_pred.iloc[p]
+                })
+
+    # Avaliação do Desempenho, juntando as previsões de todos os blocos (só os meses avaliados)
+    y_aval = y.iloc[avaliados]
+    pred_aval = y_pred.iloc[avaliados]
+    rmse = root_mean_squared_error(y_aval, pred_aval)
+    mae = mean_absolute_error(y_aval, pred_aval)
+    r2 = r2_score(y_aval, pred_aval)
 
     # Validação Cruzada: R² de cada bloco e média ± DP dos blocos
     r2_blocos = pd.Series(r2_blocos)
-    print("R² de cada bloco:", r2_blocos.round(3).tolist())
-    print(f"R² dos blocos: média {r2_blocos.mean():.3f} ± DP {r2_blocos.std():.3f}")
+
+    if verbose:
+        print("RMSE:", rmse)
+        print("MAE:", mae)
+        print("r²:", r2)
+        print("R² de cada bloco:", r2_blocos.round(3).tolist())
+        print(f"R² dos blocos: média {r2_blocos.mean():.3f} ± DP {r2_blocos.std():.3f}")
+
+    # Tabela com uma linha, no mesmo formato da do knn_regressor
+    resultado = pd.DataFrame([{
+        "variavel": var_alvo,
+        "rmse": rmse,
+        "mae": mae,
+        "r2": r2,
+        "r2_blocos": r2_blocos.round(3).tolist()
+    }])
 
     # O tutorial também faz o accuracy score, que eu deveria adequar para
     # as métricas, mas acho que acabaria dando na mesma.
+
+    if devolver_previsoes:
+        return resultado, pd.DataFrame(linhas_previsoes)
+
+    return resultado
 
 
 # %% [markdown]

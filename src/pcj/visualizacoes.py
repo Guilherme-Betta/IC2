@@ -748,8 +748,8 @@ def validacao_imputacoes(resumo, metrica="rmse", nome=None, plot=False, salvar=T
     resumo : pd.DataFrame
         Uma linha por método × variável, com as colunas "metodo", "pct_faltantes",
         "variavel", "<metrica>" e "<metrica>_dp" (o resumo do notebook
-        aplicacoes/avaliacoes_imputacoes, gravado na aba "resumo" do
-        avaliacao_imputacoes_A.xlsx).
+        aplicacoes/imputacoes_outliers_tratados, gravado na aba "resumo" do
+        imputacoes_outliers_tratados.xlsx).
     metrica : str, default "rmse"
         "rmse" ou "mae". O R² fica de fora porque não tem DP entre as rodadas.
     nome : str, optional

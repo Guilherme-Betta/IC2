@@ -106,7 +106,7 @@ def preparar_para_metricas(df_verdadeiro, df_predito, metadados, verbose=False):
 # # Introdução artificial de NaN
 
 # %%
-def simular_dados_faltantes(df, pct_remover=0.05, seed=42, verbose=False):
+def simular_dados_faltantes(df, pct_remover=0.05, seed=42, verbose=False, meses_sorteio=None):
     """
     Versão simplificada: cria dataset com NaN simulado.
     
@@ -120,6 +120,12 @@ def simular_dados_faltantes(df, pct_remover=0.05, seed=42, verbose=False):
         Seed para reprodutibilidade.
     verbose : bool, default False
         Se True, exibe (print) quantas colunas receberam NaN e a porcentagem removida.
+    meses_sorteio : list, optional
+        Rótulos (índice de df) dos meses que podem ser sorteados; todos precisam ser
+        meses completos (sem NaN). Os outros meses completos continuam no dataset
+        simulado, sem NaN. Em cada coluna, são removidos
+        int(len(meses_sorteio) * pct_remover) valores. Se None, sorteia entre todos
+        os meses completos, by default None
     
     Returns
     -------
@@ -127,6 +133,11 @@ def simular_dados_faltantes(df, pct_remover=0.05, seed=42, verbose=False):
         Dataset com NaN simulado com valores removidos aleatoriamente.
     mascara : pd.DataFrame
         Máscara marcando as coordenadas dos dados faltantes.
+    
+    Raises
+    ------
+    ValueError
+        Se algum mês de meses_sorteio não for um mês completo (sem NaN) de df.
     """
     
     np.random.seed(seed)
@@ -143,14 +154,25 @@ def simular_dados_faltantes(df, pct_remover=0.05, seed=42, verbose=False):
     # Cria dataset simulado
     df_sim = df_ref.copy()
 
-    n_remover = int(len(df_sim) * pct_remover)
+    # Meses que podem ser sorteados: todos os completos ou só os de meses_sorteio
+    if meses_sorteio is None:
+        candidatos = df_ref.index
+    else:
+        # Um mês com NaN não serve: o valor verdadeiro dele não é conhecido
+        if not pd.Index(meses_sorteio).isin(df_ref.index).all():
+            raise ValueError("meses_sorteio só pode ter meses completos (sem NaN) de df.")
+        # Mantém a ordem de df_ref: com a mesma seed, o sorteio escolhe as mesmas posições.
+        # É isso que permite sortear as mesmas células em duas bases com os mesmos meses
+        candidatos = df_ref.index[df_ref.index.isin(meses_sorteio)]
+
+    n_remover = int(len(candidatos) * pct_remover)
 
     # Cria a máscara com as coordenadas dos dados faltantes
     mascara = pd.DataFrame(False, index=df_ref.index, columns=df_ref.columns)
     
     # Remove valores aleatoriamente de TODAS as colunas (exceto metadados)
     for col in todas_cols:
-        indices = np.random.choice(df_sim.index, n_remover, replace=False)
+        indices = np.random.choice(candidatos, n_remover, replace=False)
         df_sim.loc[indices, col] = np.nan
         mascara.loc[indices, col] = True
     
@@ -282,7 +304,7 @@ def avaliar_imputacao(df_verdadeiro, df_imputado, mascara,
 
 
 # %%
-def avaliacao_completa(df, n_seeds=30, devolver_celulas=False):
+def avaliacao_completa(df, n_seeds=30, devolver_celulas=False, meses_sorteio=None):
     """
     Orquestra a avaliação completa de todos os métodos de imputação.
     
@@ -301,6 +323,12 @@ def avaliacao_completa(df, n_seeds=30, devolver_celulas=False):
     devolver_celulas : bool, default False
         Se True, devolve também a tabela de células de todas as rodadas,
         para calcular as métricas juntando as rodadas (função metricas_juntando).
+    meses_sorteio : list, optional
+        Rótulos (índice de df) dos meses completos que podem ser sorteados, repassados
+        a simular_dados_faltantes. Serve para comparar duas bases com a mesma prova:
+        com os mesmos meses, na mesma ordem das linhas, e as mesmas seeds, o sorteio
+        escolhe as mesmas células. Se None, sorteia entre todos os meses completos,
+        by default None
     
     Returns
     -------
@@ -334,7 +362,7 @@ def avaliacao_completa(df, n_seeds=30, devolver_celulas=False):
 
         # Para média e mediana
         sim, mascara = simular_dados_faltantes(
-            df, pct_remover=0.05, seed=seed
+            df, pct_remover=0.05, seed=seed, meses_sorteio=meses_sorteio
         )
 
         metodos = [("media", mean_imput), ("mediana", median_imput)]
@@ -350,7 +378,7 @@ def avaliacao_completa(df, n_seeds=30, devolver_celulas=False):
 
         # Para KNN (mesmo loop de antes, só que com ajustes para acomodar o KNN)
         sim, mascara = simular_dados_faltantes(
-            df, pct_remover=0.3, seed=seed
+            df, pct_remover=0.3, seed=seed, meses_sorteio=meses_sorteio
         )
 
         metodos = [("knn", knn_imput)]

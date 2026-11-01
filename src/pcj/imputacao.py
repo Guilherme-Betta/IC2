@@ -189,7 +189,7 @@ def median_imput(df, max_missing=0.05,
 # %%
 def knn_imput(df, min_missing=0.05, max_missing=0.3, 
               return_reduced=False, save_missing_pct=False, salvar_arquivo=False,
-              verbose=False):
+              verbose=False, n_neighbors=2, weights="uniform", padronizar=False):
     """
     Faz a imputação dos dados faltantes via KNN (método do sklearn).
 
@@ -210,6 +210,16 @@ def knn_imput(df, min_missing=0.05, max_missing=0.3,
         Determina se um arquivo Excel com o DataFrame pós imputação deve ser gerado.
     verbose : bool, default False
         Se True, exibe (print) quantos valores faltantes restaram em cada coluna imputada.
+    n_neighbors : int, default 2
+        Número de vizinhos (os meses mais parecidos) cuja média preenche cada valor faltante.
+    weights : str, default "uniform"
+        Peso de cada vizinho na média: "uniform" (pesos iguais) ou "distance"
+        (os vizinhos mais próximos pesam mais).
+    padronizar : bool, default False
+        Se True, padroniza as variáveis (z-score: média 0 e desvio padrão 1) antes de
+        procurar os vizinhos, para que as variáveis de escala grande não dominem a
+        distância entre os meses. Os valores imputados voltam para a unidade original,
+        e os valores observados não mudam.
 
     Returns
     -------
@@ -229,12 +239,29 @@ def knn_imput(df, min_missing=0.05, max_missing=0.3,
     if save_missing_pct:
         missing_pct = df[cols].isna().mean().to_dict()
     
-    imputer = KNNImputer(n_neighbors=2, weights="uniform")
+    imputer = KNNImputer(n_neighbors=n_neighbors, weights=weights)
 
     # Garante valores numéricos
     X = df[cols].astype(float)
 
-    df[cols] = imputer.fit_transform(X)
+    if padronizar:
+        import pandas as pd
+        from sklearn.preprocessing import StandardScaler
+
+        # 1. Padroniza cada variável: (valor - média) / desvio padrão.
+        #    O StandardScaler ignora os NaN no cálculo da média e do DP e os mantém no lugar
+        padronizador = StandardScaler()
+        X_padronizado = padronizador.fit_transform(X)
+
+        # 2. Imputa no espaço padronizado e volta para a unidade original: valor × DP + média
+        imputado = padronizador.inverse_transform(imputer.fit_transform(X_padronizado))
+        imputado = pd.DataFrame(imputado, index=X.index, columns=cols)
+
+        # 3. Preenche só os valores faltantes (fillna): os observados ficam exatamente como
+        #    estavam, sem os arredondamentos da ida e volta da padronização
+        df[cols] = X.fillna(imputado)
+    else:
+        df[cols] = imputer.fit_transform(X)
 
     # Verifica se ainda há valores faltantes nas colunas imputadas
     if verbose:

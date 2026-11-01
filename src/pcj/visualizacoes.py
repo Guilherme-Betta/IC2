@@ -884,6 +884,387 @@ def validacao_imputacoes(resumo, metrica="rmse", nome=None, plot=False, salvar=T
 
 
 # %% [markdown]
+# # Com × sem tratamento de outliers (imputação)
+
+# %%
+def rodadas_ganhas_barras(rodadas_ganhas, metricas=("rmse", "mae", "r2"), nome="rodadas_ganhas",
+                          plot=False, salvar=True):
+    """
+    Gera a figura-resumo do com × sem tratamento de outliers na imputação: em quantas
+    comparações (rodadas × variáveis) cada base foi melhor, por método e taxa de falhas.
+    Um painel por métrica, com uma barra empilhada por método × taxa (base tratada melhor,
+    empate e base não tratada melhor), somando as variáveis.
+
+    Parameters
+    ----------
+    rodadas_ganhas : pd.DataFrame
+        Uma linha por taxa × métrica × método × variável, com as colunas "pct_faltantes",
+        "metrica", "metodo", "variavel", "tratada_melhor", "empate" e "nao_tratada_melhor"
+        (a aba "rodadas_ganhas" do imputacoes_mesma_prova_nao_tratados.xlsx).
+    metricas : tuple of str, default ("rmse", "mae", "r2")
+        Métricas desenhadas, uma por painel, na ordem dada.
+    nome : str, default "rodadas_ganhas"
+        Nome base do arquivo salvo.
+    plot : bool, default False
+        Determina se o código deve gerar visualizações
+        ao ser carregado.
+    salvar : bool, default True
+        Determina se o código deve salvar as visualizações
+        ao ser carregado.
+
+    Returns
+    -------
+    None
+    """
+    # Cores: tratada melhor em azul, empate em cinza, não tratada melhor em vermelho;
+    # textos e eixos em tons neutros
+    cores = {"tratada_melhor": "#2a78d6", "empate": "#c3c2b7", "nao_tratada_melhor": "#e34948"}
+    cores_numeros = {"tratada_melhor": "white", "empate": "#0b0b0b", "nao_tratada_melhor": "white"}
+    nomes_metodos = {"media": "Média", "mediana": "Mediana", "knn": "KNN"}
+    nomes_metricas = {"rmse": "RMSE", "mae": "MAE", "r2": "R²"}
+    partes = ["tratada_melhor", "empate", "nao_tratada_melhor"]
+    cor_texto = "#0b0b0b"
+    cor_secundaria = "#52514e"
+    cor_eixos = "#898781"
+
+    # 1. Métodos e taxas na ordem em que aparecem na tabela
+    metodos = list(rodadas_ganhas["metodo"].unique())
+    taxas = list(rodadas_ganhas["pct_faltantes"].unique())
+
+    # 2. Uma barra por método × taxa, de cima para baixo: a posição y diminui a cada barra,
+    #    e um espaço extra separa os métodos
+    barras = []
+    posicoes = []
+    rotulos_taxas = []
+    y = 0
+    for metodo in metodos:
+        for taxa in taxas:
+            barras.append((metodo, taxa))
+            posicoes.append(y)
+            rotulos_taxas.append(f"{taxa:.0%}")
+            y = y - 1
+        y = y - 0.9
+
+    fig, axs = plt.subplots(1, len(metricas), figsize=(5 * len(metricas), 6.2), sharey=True, squeeze=False)
+
+    for i, metrica in enumerate(metricas):
+        ax = axs[0, i]
+
+        # 3. Soma das variáveis: uma linha por método e taxa (o índice é o par (método, taxa))
+        da_metrica = rodadas_ganhas[rodadas_ganhas["metrica"] == metrica]
+        soma = da_metrica.groupby(["metodo", "pct_faltantes"])[partes].sum()
+
+        # Comparações em cada barra (rodadas × variáveis): a soma das três partes, a mesma em todas
+        total = soma.iloc[0].sum()
+
+        # 4. Barras empilhadas: cada parte começa onde a anterior terminou (left)
+        inicio = [0] * len(barras)
+        for parte in partes:
+            for b, (metodo, taxa) in enumerate(barras):
+                valor = soma.loc[(metodo, taxa), parte]
+                ax.barh(posicoes[b], valor, left=inicio[b], height=0.75, color=cores[parte],
+                        edgecolor="white", linewidth=1.5)
+
+                # Número dentro da parte, só se ela tiver espaço (8% da barra ou mais).
+                # O fundo (bbox) da cor da parte esconde a linha da metade atrás do número
+                if valor >= 0.08 * total:
+                    ax.text(inicio[b] + valor / 2, posicoes[b], str(valor), ha="center", va="center",
+                            fontsize=9, color=cores_numeros[parte], zorder=4,
+                            bbox={"facecolor": cores[parte], "edgecolor": "none", "pad": 1})
+
+                inicio[b] = inicio[b] + valor
+
+        # 5. Linha da metade: à direita dela, a não tratada foi melhor na maioria das comparações
+        ax.axvline(total / 2, color=cor_texto, linewidth=1, linestyle="--", zorder=3)
+        ax.text(total / 2, posicoes[0] + 0.6, f"metade ({total // 2})", ha="center", va="bottom",
+                fontsize=8, color=cor_secundaria, zorder=4,
+                bbox={"facecolor": "white", "edgecolor": "none", "pad": 1})
+
+        # Título, eixos e rótulos das taxas
+        ax.set_title(nomes_metricas[metrica], color=cor_texto, pad=16)
+        ax.set_xlim(0, total)
+        ax.set_xticks([0, total // 4, total // 2, 3 * total // 4, total])
+        ax.set_xlabel(f"comparações (rodadas × variáveis, de {total})", color=cor_eixos)
+        ax.set_yticks(posicoes)
+        ax.set_yticklabels(rotulos_taxas)
+        ax.tick_params(colors=cor_eixos, length=0)
+        ax.tick_params(axis="y", colors=cor_texto)
+
+        # Sem as bordas de cima, da direita e da esquerda
+        ax.spines["top"].set_visible(False)
+        ax.spines["right"].set_visible(False)
+        ax.spines["left"].set_visible(False)
+
+    # 6. Nome de cada método à esquerda do grupo de barras dele, no primeiro painel.
+    #    get_yaxis_transform: x em fração do painel (negativo = fora, à esquerda) e y nas posições das barras
+    for m, metodo in enumerate(metodos):
+        meio = sum(posicoes[m * len(taxas): (m + 1) * len(taxas)]) / len(taxas)
+        axs[0, 0].text(-0.16, meio, nomes_metodos[metodo], transform=axs[0, 0].get_yaxis_transform(),
+                       ha="right", va="center", color=cor_texto, fontweight="bold")
+
+    # 7. Uma legenda para a figura toda. Os quadrados (Rectangle) só desenham as cores
+    quadrados = []
+    for parte in partes:
+        quadrados.append(plt.Rectangle((0, 0), 1, 1, color=cores[parte]))
+    rotulos = ["tratada melhor", "empate", "não tratada melhor"]
+    fig.suptitle("Com × sem tratamento de outliers: em quantas comparações cada base foi melhor",
+                 color=cor_texto, y=0.995)
+    fig.legend(quadrados, rotulos, loc="upper center", bbox_to_anchor=(0.5, 0.955), ncol=3, frameon=False)
+    fig.text(0.5, 0.895, "Melhor: erro menor no RMSE e no MAE; R² maior no R²", ha="center",
+             color=cor_secundaria, fontsize=9)
+
+    # rect deixa livre a faixa da esquerda (nomes dos métodos) e a de cima (título e legenda)
+    plt.tight_layout(rect=(0.06, 0, 1, 0.88))
+
+    # Salva sem fechar a figura, para ela ainda poder ser exibida
+    if salvar:
+        salvar_visualizacao(fig, nome)
+
+    if plot:
+        plt.show()
+    else:
+        plt.close(fig)
+
+
+# %%
+def diferenca_mapa_calor(comparacao, metricas=("rmse", "mae"), limite=10, nome="diferenca_mapa_calor",
+                         plot=False, salvar=True):
+    """
+    Gera o mapa de calor do com × sem tratamento de outliers na imputação: a diferença
+    do erro entre as bases (tratada − não tratada), em % do erro da não tratada, para cada
+    variável (linhas) e cada método × taxa de falhas (colunas). Um painel por métrica.
+    Azul: a tratada errou menos; vermelho: a não tratada errou menos.
+
+    Parameters
+    ----------
+    comparacao : pd.DataFrame
+        Uma linha por taxa × métrica × método × variável, com as colunas "pct_faltantes",
+        "metrica", "metodo", "variavel", "nao_tratada" e "diferenca" (a aba "comparacao"
+        do imputacoes_mesma_prova_nao_tratados.xlsx).
+    metricas : tuple of str, default ("rmse", "mae")
+        Métricas desenhadas, uma por painel. Só métricas de erro: no R², perto de 0, a
+        diferença em % não tem sentido.
+    limite : float, default 10
+        Diferença (em %) que recebe a cor mais forte; acima disso, a cor não muda, mas o
+        número escrito na célula é o valor real.
+    nome : str, default "diferenca_mapa_calor"
+        Nome base do arquivo salvo.
+    plot : bool, default False
+        Determina se o código deve gerar visualizações
+        ao ser carregado.
+    salvar : bool, default True
+        Determina se o código deve salvar as visualizações
+        ao ser carregado.
+
+    Returns
+    -------
+    None
+    """
+    from matplotlib.colors import LinearSegmentedColormap
+
+    # Cores: azul (a tratada erra menos), cinza claro no zero e vermelho (a não tratada erra menos)
+    cmap = LinearSegmentedColormap.from_list("diferenca", ["#2a78d6", "#f0efec", "#e34948"])
+    nomes_metodos = {"media": "Média", "mediana": "Mediana", "knn": "KNN"}
+    nomes_metricas = {"rmse": "RMSE", "mae": "MAE"}
+    cor_texto = "#0b0b0b"
+    cor_eixos = "#898781"
+
+    # 1. Métodos, taxas e variáveis na ordem em que aparecem na tabela
+    metodos = list(comparacao["metodo"].unique())
+    taxas = list(comparacao["pct_faltantes"].unique())
+    variaveis = list(comparacao["variavel"].unique())
+
+    fig, axs = plt.subplots(1, len(metricas), figsize=(6.5 * len(metricas), 8.6), squeeze=False)
+
+    for i, metrica in enumerate(metricas):
+        ax = axs[0, i]
+        da_metrica = comparacao[comparacao["metrica"] == metrica]
+
+        # 2. Tabela do mapa: uma linha por variável, uma coluna por método × taxa,
+        #    com a diferença em % do erro da não tratada
+        mapa = []
+        for variavel in variaveis:
+            linha_mapa = []
+            for metodo in metodos:
+                for taxa in taxas:
+                    linha = da_metrica[(da_metrica["variavel"] == variavel) & (da_metrica["metodo"] == metodo)
+                                       & (da_metrica["pct_faltantes"] == taxa)].iloc[0]
+                    linha_mapa.append(100 * linha["diferenca"] / linha["nao_tratada"])
+            mapa.append(linha_mapa)
+
+        # 3. Mapa de cores: vmin e vmax fixam a escala em -limite a +limite (o 0 fica no meio, em cinza)
+        imagem = ax.imshow(mapa, cmap=cmap, vmin=-limite, vmax=limite, aspect="auto")
+
+        # 4. O número de cada célula, com vírgula. Em células de cor forte, o número fica branco
+        for n_linha in range(len(variaveis)):
+            for n_coluna in range(len(metodos) * len(taxas)):
+                valor = mapa[n_linha][n_coluna]
+                if abs(valor) < 0.05:
+                    valor = 0.0    # evita "-0,0"
+                cor_numero = "white" if abs(valor) > 0.6 * limite else cor_texto
+                ax.text(n_coluna, n_linha, f"{valor:.1f}".replace(".", ","), ha="center", va="center",
+                        fontsize=7.5, color=cor_numero)
+
+        # 5. Linhas brancas entre os métodos (cada método ocupa len(taxas) colunas)
+        for m in range(1, len(metodos)):
+            ax.axvline(m * len(taxas) - 0.5, color="white", linewidth=4)
+
+        # 6. Taxas em cima de cada coluna; nome do método e da métrica acima delas
+        rotulos_taxas = []
+        for metodo in metodos:
+            for taxa in taxas:
+                rotulos_taxas.append(f"{taxa:.0%}")
+        ax.set_xticks(range(len(metodos) * len(taxas)))
+        ax.set_xticklabels(rotulos_taxas, fontsize=8, color=cor_texto)
+        ax.xaxis.tick_top()
+        for m, metodo in enumerate(metodos):
+            ax.text(m * len(taxas) + (len(taxas) - 1) / 2, -1.3, nomes_metodos[metodo], ha="center",
+                    color=cor_texto)
+        ax.text((len(metodos) * len(taxas) - 1) / 2, -2.4, nomes_metricas[metrica], ha="center",
+                color=cor_texto, fontweight="bold")
+
+        ax.set_yticks(range(len(variaveis)))
+        ax.set_yticklabels(variaveis, color=cor_texto)
+        ax.tick_params(length=0)
+
+        # Sem bordas em volta do mapa
+        for lado in ax.spines.values():
+            lado.set_visible(False)
+
+    fig.suptitle("Com × sem tratamento de outliers: diferença do erro, em %, por variável, método e taxa",
+                 color=cor_texto, y=0.99)
+
+    # Espaço entre os painéis (wspace) e, à direita, para a barra de cores
+    fig.subplots_adjust(left=0.08, right=0.87, top=0.83, bottom=0.03, wspace=0.28)
+
+    # 7. Barra de cores num eixo próprio, à direita dos mapas ([esquerda, baixo, largura, altura],
+    #    em fração da figura), para não tomar o espaço deles
+    eixo_barra = fig.add_axes([0.9, 0.3, 0.012, 0.4])
+    barra = fig.colorbar(imagem, cax=eixo_barra)
+    barra.set_label("tratada − não tratada (% do erro da não tratada)\nazul: a tratada errou menos",
+                    color=cor_eixos, fontsize=8)
+    barra.ax.tick_params(labelsize=8, colors=cor_eixos)
+    barra.outline.set_visible(False)
+
+    # Salva sem fechar a figura, para ela ainda poder ser exibida
+    if salvar:
+        salvar_visualizacao(fig, nome)
+
+    if plot:
+        plt.show()
+    else:
+        plt.close(fig)
+
+
+# %%
+def celulas_que_mudam_barras(celulas_que_mudam, nome="celulas_que_mudam", plot=False, salvar=True):
+    """
+    Gera a figura de quanto o valor imputado muda quando os meses com valores extremos
+    entram na base (base não tratada × tratada, nas mesmas células): uma barra por
+    método × taxa de falhas, com a mudança média em desvios padrão (DP) da variável, e
+    a % de células em que o valor imputado é o mesmo nas duas bases.
+
+    Parameters
+    ----------
+    celulas_que_mudam : pd.DataFrame
+        Uma linha por método × taxa × variável, com as colunas "metodo", "pct_faltantes",
+        "variavel", "n_celulas", "pct_iguais" e "mudanca_media_dp" (a aba
+        "celulas_que_mudam" do imputacoes_mesma_prova_nao_tratados.xlsx).
+    nome : str, default "celulas_que_mudam"
+        Nome base do arquivo salvo.
+    plot : bool, default False
+        Determina se o código deve gerar visualizações
+        ao ser carregado.
+    salvar : bool, default True
+        Determina se o código deve salvar as visualizações
+        ao ser carregado.
+
+    Returns
+    -------
+    None
+    """
+    # Cores por método (as mesmas da validacao_imputacoes); textos e eixos em tons neutros
+    cores = {"media": "#2a78d6", "mediana": "#eb6834", "knn": "#1baf7a"}
+    nomes_metodos = {"media": "Média", "mediana": "Mediana", "knn": "KNN"}
+    cor_texto = "#0b0b0b"
+    cor_secundaria = "#52514e"
+    cor_eixos = "#898781"
+    cor_grade = "#e1e0d9"
+
+    # 1. Métodos e taxas na ordem em que aparecem na tabela
+    metodos = list(celulas_que_mudam["metodo"].unique())
+    taxas = list(celulas_que_mudam["pct_faltantes"].unique())
+
+    fig, ax = plt.subplots(figsize=(8, 5.4))
+
+    # 2. Uma barra por método × taxa, de cima para baixo, com um espaço extra entre os métodos
+    posicoes = []
+    rotulos = []
+    meios = []
+    y = 0
+    for metodo in metodos:
+        posicoes_metodo = []
+        for taxa in taxas:
+            grupo = celulas_que_mudam[(celulas_que_mudam["metodo"] == metodo)
+                                      & (celulas_que_mudam["pct_faltantes"] == taxa)]
+
+            # Médias de todas as células do grupo: cada variável pesa pelo número de células dela
+            n = grupo["n_celulas"].sum()
+            mudanca = (grupo["mudanca_media_dp"] * grupo["n_celulas"]).sum() / n
+            iguais = (grupo["pct_iguais"] * grupo["n_celulas"]).sum() / n
+
+            ax.barh(y, mudanca, height=0.75, color=cores[metodo])
+
+            # Ao lado da barra: a mudança e a % de células iguais, com vírgula
+            texto = f"{mudanca:.3f} DP · {iguais:.1f}% iguais".replace(".", ",")
+            ax.text(mudanca + 0.003, y, texto, va="center", fontsize=8.5, color=cor_secundaria)
+
+            posicoes.append(y)
+            posicoes_metodo.append(y)
+            rotulos.append(f"{taxa:.0%}")
+            y = y - 1
+
+        meios.append(sum(posicoes_metodo) / len(posicoes_metodo))
+        y = y - 0.9
+
+    # 3. Nome de cada método à esquerda do grupo de barras dele
+    #    (get_yaxis_transform: x em fração do painel e y nas posições das barras)
+    for metodo, meio in zip(metodos, meios):
+        ax.text(-0.13, meio, nomes_metodos[metodo], transform=ax.get_yaxis_transform(), ha="right",
+                va="center", color=cor_texto, fontweight="bold")
+
+    # Folga à direita para o texto da barra mais longa
+    ax.set_xlim(0, ax.get_xlim()[1] * 1.5)
+    ax.set_xlabel("mudança média do valor imputado (em DP da variável)", color=cor_eixos)
+    ax.set_yticks(posicoes)
+    ax.set_yticklabels(rotulos)
+    ax.tick_params(colors=cor_eixos, length=0)
+    ax.tick_params(axis="y", colors=cor_texto)
+    ax.grid(axis="x", color=cor_grade, linewidth=0.8)
+    ax.set_axisbelow(True)
+
+    # Sem as bordas de cima, da direita e da esquerda
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    ax.spines["left"].set_visible(False)
+
+    fig.suptitle("Quanto o valor imputado muda quando os meses com valores extremos entram",
+                 color=cor_texto, y=0.98)
+
+    # rect deixa livre a faixa da esquerda (nomes dos métodos) e a de cima (título)
+    plt.tight_layout(rect=(0.08, 0, 1, 0.95))
+
+    # Salva sem fechar a figura, para ela ainda poder ser exibida
+    if salvar:
+        salvar_visualizacao(fig, nome)
+
+    if plot:
+        plt.show()
+    else:
+        plt.close(fig)
+
+
+# %% [markdown]
 # # Todas as Visualizações
 
 # %%

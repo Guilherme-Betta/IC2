@@ -26,3 +26,6 @@ archives/
 *.gslides
 *.gdraw
 *.md
+
+# Ignorar os metadados gerados pelo pip install -e . (recriados a cada instalação)
+src/pcj.egg-info/

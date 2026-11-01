@@ -139,9 +139,9 @@ def boxplot_estatisticas(df, plot=False, salvar=True):
 
     cols_max = [coluna for coluna in df.columns if coluna.endswith('Max.')]
 
-    if not cols_max and cols_med and cols_min:
+    if not cols_max and not cols_med and not cols_min:
         print("Não foram encontradas colunas finalizando com Min., Med. ou Max."
-        "Talvez o DataFrames selecionado não esteja pivotado.")
+        " Talvez o DataFrame selecionado não esteja pivotado.")
         pass
     
     # Seleciona colunas com a estatística "Min."

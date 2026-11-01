@@ -93,7 +93,7 @@ def isolation_forest(
 # # Random Forest - Regressão
 
 # %%
-def random_forest(df, variaveis=None, var_alvo='pH', n_blocos=5, embaralhar=False,
+def random_forest(df, variaveis=None, var_alvo='pH', n_blocos=5, embaralhar=False, seed_embaralhar=42,
                   meses_avaliados=None, devolver_previsoes=False, coluna_data="Data", verbose=False):
     """
     Roda um algoritmo de regressão com o modelo Random Forest.
@@ -116,7 +116,10 @@ def random_forest(df, variaveis=None, var_alvo='pH', n_blocos=5, embaralhar=Fals
     embaralhar : bool, optional
         Se False, cada bloco é um período de meses seguidos (a base está em ordem de data),
         e o modelo é testado em anos que não viu. Se True, os meses são sorteados para os
-        blocos (KFold aleatório, random_state=42), by default False
+        blocos (KFold aleatório, com a seed seed_embaralhar), by default False
+    seed_embaralhar : int, optional
+        Seed do sorteio dos meses para os blocos (random_state do KFold). Só é usada com
+        embaralhar=True; seeds diferentes dão divisões diferentes, by default 42
     meses_avaliados : list, optional
         Rótulos (índice de df) dos meses completos que são testados e entram nas métricas.
         Os outros meses completos entram no treino de todos os blocos, mas nunca são
@@ -168,7 +171,7 @@ def random_forest(df, variaveis=None, var_alvo='pH', n_blocos=5, embaralhar=Fals
     from sklearn.model_selection import KFold
 
     if embaralhar:
-        kfold = KFold(n_splits=n_blocos, shuffle=True, random_state=42)
+        kfold = KFold(n_splits=n_blocos, shuffle=True, random_state=seed_embaralhar)
     else:
         kfold = KFold(n_splits=n_blocos)
 
@@ -268,7 +271,7 @@ def random_forest(df, variaveis=None, var_alvo='pH', n_blocos=5, embaralhar=Fals
 # # KNN Regressor
 
 # %%
-def knn_regressor(df, variaveis=None, n_blocos=5, embaralhar=False,
+def knn_regressor(df, variaveis=None, n_blocos=5, embaralhar=False, seed_embaralhar=42,
                   meses_avaliados=None, devolver_previsoes=False, coluna_data="Data"):
     """
     Roda um algoritmo de previsão de valores de uma determinada coluna.
@@ -292,7 +295,10 @@ def knn_regressor(df, variaveis=None, n_blocos=5, embaralhar=False,
     embaralhar : bool, optional
         Se False, cada bloco é um período de meses seguidos (a base está em ordem de data),
         e o modelo é testado em anos que não viu. Se True, os meses são sorteados para os
-        blocos (KFold aleatório, random_state=42), by default False
+        blocos (KFold aleatório, com a seed seed_embaralhar), by default False
+    seed_embaralhar : int, optional
+        Seed do sorteio dos meses para os blocos (random_state do KFold). Só é usada com
+        embaralhar=True; seeds diferentes dão divisões diferentes, by default 42
     meses_avaliados : list, optional
         Rótulos (índice de df) dos meses completos que são testados e entram nas métricas.
         Os outros meses completos entram no treino de todos os blocos, mas nunca são
@@ -374,7 +380,7 @@ def knn_regressor(df, variaveis=None, n_blocos=5, embaralhar=False,
     # Divisão dos meses em blocos. Sem embaralhar, o KFold corta a base na ordem das linhas
     # (ordem de data): cada bloco é um período de meses seguidos
     if embaralhar:
-        kfold = KFold(n_splits=n_blocos, shuffle=True, random_state=42)
+        kfold = KFold(n_splits=n_blocos, shuffle=True, random_state=seed_embaralhar)
     else:
         kfold = KFold(n_splits=n_blocos)
 

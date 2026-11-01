@@ -25,7 +25,8 @@ from pcj.utils import salvar_visualizacao
 # Função que auxilia no salvamento de figuras
 def salvar_plot(nome):
     """
-    Salva a figura atual com o nome informado.
+    Salva a figura atual com o nome informado, sem fechá-la: quem chama
+    decide se a figura é mostrada (plt.show) ou fechada (plt.close).
 
     Parameters
     ----------
@@ -37,7 +38,6 @@ def salvar_plot(nome):
     None
     """
     salvar_visualizacao(plt.gcf(), nome)
-    plt.close()
 
 
 # %% [markdown]
@@ -97,13 +97,15 @@ def boxplot_tudo(df, plot=False, salvar=True):
         # Ajusta o espaçamento entre os gráficos para não ficarem grudados
         plt.tight_layout()
 
-        # Mostra a figura
-        if plot:
-            plt.show()
-        
-        # Salva a figura
+        # Salva antes de mostrar (no notebook, o plt.show() fecha a figura)
         if salvar:
             salvar_plot('boxplot_tudo')
+
+        # Mostra a figura ou a fecha
+        if plot:
+            plt.show()
+        else:
+            plt.close()
     else:
         print('Esse dataframe não apresenta coluna \'Estatistica\'. Talvez você tenha usado um dataframe pivotado?')
 
@@ -160,11 +162,15 @@ def boxplot_estatisticas(df, plot=False, salvar=True):
 
         plt.tight_layout()
         
-        if plot:
-            plt.show("boxplots_min")
-
+        # Salva antes de mostrar (no notebook, o plt.show() fecha a figura)
         if salvar:
             salvar_plot("boxplots_min")
+
+        # Mostra a figura ou a fecha
+        if plot:
+            plt.show()
+        else:
+            plt.close()
 
     # Seleciona colunas com a estatística "Med."
     if not cols_med:
@@ -183,11 +189,15 @@ def boxplot_estatisticas(df, plot=False, salvar=True):
 
         plt.tight_layout()
 
-        if plot:
-            plt.show("boxplots_med")
-
+        # Salva antes de mostrar (no notebook, o plt.show() fecha a figura)
         if salvar:
             salvar_plot("boxplots_med")
+
+        # Mostra a figura ou a fecha
+        if plot:
+            plt.show()
+        else:
+            plt.close()
 
     # Seleciona colunas com a estatística "Max."
     if not cols_max:
@@ -206,11 +216,15 @@ def boxplot_estatisticas(df, plot=False, salvar=True):
 
         plt.tight_layout()
 
-        if plot:
-            plt.show("boxplots_max")
-
+        # Salva antes de mostrar (no notebook, o plt.show() fecha a figura)
         if salvar:
             salvar_plot("boxplots_max")
+
+        # Mostra a figura ou a fecha
+        if plot:
+            plt.show()
+        else:
+            plt.close()
 
 
 # %% [markdown]
@@ -244,7 +258,9 @@ def visualizacoes_missingno(df, plot=False, salvar=True):
     if salvar:
         salvar_plot("matrix_msno")
 
-    if not plot:
+    if plot:
+        plt.show()
+    else:
         plt.close()
 
     ## Gera um gráfico de barras
@@ -253,7 +269,9 @@ def visualizacoes_missingno(df, plot=False, salvar=True):
     if salvar:
         salvar_plot('bar_msno')
 
-    if not plot:
+    if plot:
+        plt.show()
+    else:
         plt.close()
 
     ## Gera um mapa de calor
@@ -262,7 +280,9 @@ def visualizacoes_missingno(df, plot=False, salvar=True):
     if salvar:
         salvar_plot('heatmap_msno')
 
-    if not plot:
+    if plot:
+        plt.show()
+    else:
         plt.close()
 
     ## Gera um dendograma
@@ -271,8 +291,10 @@ def visualizacoes_missingno(df, plot=False, salvar=True):
     if salvar: 
         salvar_plot('dendogram_msno')
 
-    if not plot:
-        plt.close()   
+    if plot:
+        plt.show()
+    else:
+        plt.close()
 
 
 # %%
@@ -323,6 +345,8 @@ def faltantes_ano(df, plot=False, salvar=True):
 
    if plot:
       plt.show()
+   else:
+      plt.close()
 
 
 # %%
@@ -374,6 +398,8 @@ def faltantes_mes(df, plot=False, salvar=True):
 
     if plot:
         plt.show()
+    else:
+        plt.close()
 
 
 # %% [markdown]
@@ -447,6 +473,8 @@ def scatter_tudo(df, plot=False, salvar=True):
 
     if plot:
         plt.show()
+    else:
+        plt.close()
 
 
 # %% [markdown]
@@ -495,10 +523,12 @@ def correlacao(df, method='pearson', plot=False, salvar=True):
     plt.tight_layout()
 
     if salvar:
-        salvar_plot('correlacao_de', method)
+        salvar_plot('correlacao_de_' + str(method))
 
     if plot:
         plt.show()
+    else:
+        plt.close()
 
 
 # %% [markdown]
@@ -616,7 +646,7 @@ def k_means_clusters(df, tabela, variaveis=None, eixos=None, nome="k_means_clust
 
     plt.tight_layout()
 
-    # Salva sem fechar a figura (o salvar_plot fecha), para ela ainda poder ser exibida
+    # Salva sem fechar a figura, para ela ainda poder ser exibida
     if salvar:
         salvar_visualizacao(fig, nome)
 
@@ -721,7 +751,7 @@ def curvas_selecao_k(resumo, nome="selecao_k", plot=False, salvar=True):
 
     plt.tight_layout()
 
-    # Salva sem fechar a figura (o salvar_plot fecha), para ela ainda poder ser exibida
+    # Salva sem fechar a figura, para ela ainda poder ser exibida
     if salvar:
         salvar_visualizacao(fig, nome)
 
@@ -843,7 +873,7 @@ def validacao_imputacoes(resumo, metrica="rmse", nome=None, plot=False, salvar=T
     # rect deixa livre a faixa de cima da figura, onde ficam o título e a legenda
     plt.tight_layout(rect=(0, 0, 1, 0.93))
 
-    # Salva sem fechar a figura (o salvar_plot fecha), para ela ainda poder ser exibida
+    # Salva sem fechar a figura, para ela ainda poder ser exibida
     if salvar:
         salvar_visualizacao(fig, nome)
 

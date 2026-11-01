@@ -401,32 +401,138 @@ def avaliacao_completa(df, n_seeds=30, devolver_celulas=False, meses_sorteio=Non
 
 
 # %%
+def avaliacao_mesma_prova(df, taxas=(0.05, 0.1, 0.2, 0.3), seeds=range(30),
+                          metodos=("media", "mediana", "knn"), n_neighbors=7, weights="distance",
+                          padronizar=True, devolver_celulas=False, meses_sorteio=None):
+    """
+    Avalia os métodos de imputação na mesma prova: em cada rodada (seed) e taxa de falhas,
+    um único sorteio remove valores de todas as variáveis, e todos os métodos imputam as
+    mesmas células.
+
+    Diferenças para a avaliacao_completa (experimento A):
+    - lá, a média e a mediana são testadas com 5% de falhas e o KNN com 30% (provas
+      diferentes); aqui, todos os métodos passam por todas as taxas;
+    - lá, o KNN usa k = 2, pesos iguais e as variáveis na unidade original; aqui, o k e os
+      pesos são parâmetros, e as variáveis são padronizadas (padronizar=True).
+    Com as mesmas seeds, uma taxa de 5% sorteia as mesmas células que a média e a mediana
+    do A, e uma de 30%, as mesmas que o KNN do A.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame de interesse. As linhas com NaN são descartadas; as linhas completas
+        que sobram são a referência (valores verdadeiros).
+    taxas : tuple of float, default (0.05, 0.1, 0.2, 0.3)
+        Frações de valores removidos de cada variável.
+    seeds : iterable of int, default range(30)
+        Seeds das rodadas; cada seed sorteia outras células. Seeds diferentes das da
+        avaliação servem para escolher o k do KNN sem usar as células da prova.
+    metodos : tuple of str, default ("media", "mediana", "knn")
+        Métodos avaliados.
+    n_neighbors : int, default 7
+        Número de vizinhos do KNN (repassado a knn_imput).
+    weights : str, default "distance"
+        Pesos dos vizinhos do KNN: "uniform" ou "distance" (repassado a knn_imput).
+    padronizar : bool, default True
+        Se True, o KNN usa as variáveis padronizadas (repassado a knn_imput).
+    devolver_celulas : bool, default False
+        Se True, devolve também a tabela de células de todas as rodadas,
+        para calcular as métricas juntando as rodadas (função metricas_juntando).
+    meses_sorteio : list, optional
+        Rótulos (índice de df) dos meses completos que podem ser sorteados, repassados
+        a simular_dados_faltantes. Se None, sorteia entre todos os meses completos,
+        by default None
+
+    Returns
+    -------
+    tabela : pd.DataFrame
+        Uma linha por seed × taxa × método × variável, com as colunas variavel, rmse, mae,
+        r2, n_celulas, metodo, pct_faltantes e seed.
+    celulas : pd.DataFrame, optional
+        Apenas se devolver_celulas=True. Uma linha por célula avaliada em cada rodada:
+        variavel, indice, verdadeiro, imputado, metodo, pct_faltantes, seed.
+
+    Raises
+    ------
+    ValueError
+        Se algum método não for "media", "mediana" ou "knn".
+    """
+    from pcj.imputacao import mean_imput, median_imput, knn_imput
+
+    for metodo in metodos:
+        if metodo not in ("media", "mediana", "knn"):
+            raise ValueError(f"Método desconhecido: {metodo}")
+
+    ref = df.dropna().copy()
+
+    partes = []
+    celulas = []
+
+    for seed in seeds:
+        for taxa in taxas:
+            # Um sorteio por seed e taxa: todos os métodos imputam as mesmas células
+            sim, mascara = simular_dados_faltantes(
+                df, pct_remover=taxa, seed=seed, meses_sorteio=meses_sorteio
+            )
+
+            for metodo in metodos:
+                # Sem os limites de falhas do pipeline (max_missing=1 e min_missing=0):
+                # na avaliação, todos os métodos imputam todas as variáveis, em todas as taxas
+                if metodo == "media":
+                    imputado = mean_imput(sim, max_missing=1, return_reduced=True)
+                elif metodo == "mediana":
+                    imputado = median_imput(sim, max_missing=1, return_reduced=True)
+                else:
+                    imputado = knn_imput(sim, min_missing=0, max_missing=1, return_reduced=True,
+                                         n_neighbors=n_neighbors, weights=weights,
+                                         padronizar=padronizar)
+
+                resultado, cel = avaliar_imputacao(ref, imputado, mascara, metodo=metodo,
+                                                   pct_faltantes=taxa, devolver_celulas=True)
+                resultado["seed"] = seed    # Identifica a rodada na tabela final
+                cel["seed"] = seed
+                partes.append(resultado)
+                celulas.append(cel)
+
+    tabela = pd.concat(partes, ignore_index=True)
+
+    if devolver_celulas:
+        return tabela, pd.concat(celulas, ignore_index=True)
+
+    return tabela
+
+
+# %%
 def metricas_juntando(celulas):
     """
     Calcula RMSE, MAE e R² juntando as células de todas as rodadas (seeds).
     
     Em vez de calcular uma métrica por rodada e tirar a média, junta todas as células
-    de um método e de uma variável e calcula cada métrica uma vez só. Com poucas células
+    de um método, de uma taxa de falhas e de uma variável e calcula cada métrica uma vez só.
+    Com poucas células
     por rodada, o R² de uma rodada oscila muito; juntando, ele fica estável.
     
     Parameters
     ----------
     celulas : pd.DataFrame
-        Tabela de células devolvida por avaliacao_completa(..., devolver_celulas=True),
+        Tabela de células devolvida por avaliacao_completa ou avaliacao_mesma_prova
+        (com devolver_celulas=True),
         com as colunas variavel, verdadeiro, imputado, metodo, pct_faltantes e seed.
     
     Returns
     -------
     resultado : pd.DataFrame
-        Uma linha por método × variável, com as colunas variavel, rmse, mae, r2,
+        Uma linha por método × taxa × variável, com as colunas variavel, rmse, mae, r2,
         n_celulas (total de células juntadas), n_seeds, metodo e pct_faltantes.
     """
     from sklearn.metrics import mean_absolute_error, root_mean_squared_error, r2_score
 
     linhas = []
 
-    # Cada grupo = todas as células de um método e de uma variável, de todas as rodadas
-    for (metodo, variavel), grupo in celulas.groupby(["metodo", "variavel"], sort=False):
+    # Cada grupo = todas as células de um método, de uma taxa e de uma variável, de todas as rodadas.
+    # Na avaliacao_completa, cada método tem uma taxa só, e os grupos são os mesmos de antes
+    for (metodo, pct_faltantes, variavel), grupo in celulas.groupby(["metodo", "pct_faltantes", "variavel"],
+                                                                   sort=False):
         y_true = grupo["verdadeiro"]
         y_pred = grupo["imputado"]
 
@@ -438,7 +544,7 @@ def metricas_juntando(celulas):
             "n_celulas": len(grupo),
             "n_seeds": grupo["seed"].nunique(),
             "metodo": metodo,
-            "pct_faltantes": grupo["pct_faltantes"].iloc[0]
+            "pct_faltantes": pct_faltantes
         })
 
     return pd.DataFrame(linhas)

@@ -157,8 +157,6 @@ def decompor_estatisticas(df, estatistica=False):
     df_max : pd.DataFrame
         DataFrame com valores máximos
     """
-    from pcj.utils import dados
-
     df_completo = df.copy()
 
     df_min, df_med, df_max = df_completo[df_completo['Estatistica'] == 'Min.'], df_completo[df_completo['Estatistica'] == 'Med.'], df_completo[df_completo['Estatistica'] == 'Max.']

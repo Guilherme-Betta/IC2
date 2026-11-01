@@ -835,7 +835,7 @@ def resumo_por_mes(df, mascara, coluna_data="Data"):
 # ##### Z-Score
 
 # %%
-def remove_outliers_zscore(df, variaveis=None, threshold=3, salvar_arquivo=True):
+def remove_outliers_zscore(df, variaveis=None, threshold=3, salvar_arquivo=False):
     """
     Remove outliers de acordo com o método Z-Score.
 
@@ -848,7 +848,7 @@ def remove_outliers_zscore(df, variaveis=None, threshold=3, salvar_arquivo=True)
         de df que não são metadados (separar_colunas).
     threshold : float, default 3
         Valor de Z-Score máximo para um dado não ser considerado um outlier.
-    salvar_arquivo : bool, default True
+    salvar_arquivo : bool, default False
         Determina se um arquivo Excel do DataFrame com os outliers removidos deve ser salvo.
 
     Returns
@@ -870,7 +870,7 @@ def remove_outliers_zscore(df, variaveis=None, threshold=3, salvar_arquivo=True)
 # ##### IQR
 
 # %%
-def remove_outliers_iqr(df, variaveis=None, salvar_arquivo=True):
+def remove_outliers_iqr(df, variaveis=None, salvar_arquivo=False):
     """
     Remove outliers de acordo com o método IQR (Interquartile Range).
 
@@ -881,7 +881,7 @@ def remove_outliers_iqr(df, variaveis=None, salvar_arquivo=True):
     variaveis : list, default None
         Lista de variáveis presentes em df. Se None, usa todas as colunas
         de df que não são metadados (separar_colunas).
-    salvar_arquivo : bool, default True
+    salvar_arquivo : bool, default False
         Determina se um arquivo Excel do DataFrame com os outliers removidos deve ser salvo.
 
     Returns
@@ -903,7 +903,7 @@ def remove_outliers_iqr(df, variaveis=None, salvar_arquivo=True):
 
 # %%
 def remove_outliers_lof(df, variaveis=None, n_neighbors=20,
-                        contaminacoes=(0.05, 0.06, 0.07, 0.08, 0.09, 0.10), limiar=0.5, salvar_arquivo=True):
+                        contaminacoes=(0.05, 0.06, 0.07, 0.08, 0.09, 0.10), limiar=0.5, salvar_arquivo=False):
     """
     Remove outliers de acordo com o método LOF (Local Outlier Factor),
     usando o consenso da grade de contaminações (ver detect_outliers_lof).
@@ -922,7 +922,7 @@ def remove_outliers_lof(df, variaveis=None, n_neighbors=20,
         Valores de contaminação testados (uma rodada do LOF para cada um).
     limiar : float, default 0.5
         Fração mínima de rodadas para considerar o mês um outlier por consenso.
-    salvar_arquivo : bool, default True
+    salvar_arquivo : bool, default False
         Determina se um arquivo Excel do DataFrame com os outliers removidos deve ser salvo.
 
     Returns
@@ -944,7 +944,7 @@ def remove_outliers_lof(df, variaveis=None, n_neighbors=20,
 # ##### Todos
 
 # %%
-def remove_outliers(df, variaveis=None, method='zscore', salvar_arquivo=True, **kwargs):
+def remove_outliers(df, variaveis=None, method='zscore', salvar_arquivo=False, **kwargs):
     """
     Remove outliers com o método especificado.
     Usa as funções previamente definidas para
@@ -960,7 +960,7 @@ def remove_outliers(df, variaveis=None, method='zscore', salvar_arquivo=True, **
     method : str, default 'zscore'
         Determina o método de remoção ('zscore', 'iqr', 'lof')
         de outliers a ser utilizado.
-    salvar_arquivo : bool, default True
+    salvar_arquivo : bool, default False
         Determina se um arquivo Excel do DataFrame com os outliers removidos deve ser salvo.
     **kwargs : dict
         Parâmetros adicionais repassados para o método escolhido

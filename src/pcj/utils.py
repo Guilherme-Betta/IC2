@@ -19,7 +19,7 @@ from datetime import datetime
 
 # %%
 # Comando de sincronização Jupytext
-"""
+r"""
 
 .\.venv\Scripts\python.exe -m jupytext --sync notebooks\*.ipynb
 

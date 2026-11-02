@@ -1265,6 +1265,154 @@ def celulas_que_mudam_barras(celulas_que_mudam, nome="celulas_que_mudam", plot=F
 
 
 # %% [markdown]
+# # Com × sem tratamento de outliers (modelos)
+
+# %%
+def halteres_r2(comparacao, nome="halteres_r2", plot=False, salvar=True):
+    """
+    Gera a figura do com × sem tratamento de outliers nos modelos: o R² de cada variável
+    prevista na base tratada e na não tratada, lado a lado (halteres). Uma linha por
+    modelo × variável; a barra liga os dois R², e a cor dela diz qual base teve o R² maior.
+
+    Parameters
+    ----------
+    comparacao : pd.DataFrame
+        Uma linha por modelo × métrica × variável, com as colunas "modelo", "metrica",
+        "variavel", "tratada" e "nao_tratada" (a aba "comparacao" do
+        ML_outliers_nao_tratados.xlsx). Só as linhas do R² entram na figura.
+    nome : str, default "halteres_r2"
+        Nome base do arquivo salvo.
+    plot : bool, default False
+        Determina se o código deve gerar visualizações
+        ao ser carregado.
+    salvar : bool, default True
+        Determina se o código deve salvar as visualizações
+        ao ser carregado.
+
+    Returns
+    -------
+    None
+    """
+    from matplotlib.lines import Line2D
+
+    # Cores da barra: azul quando a tratada tem o R² maior, vermelho quando é a não tratada
+    # (as mesmas da rodadas_ganhas_barras) e cinza se empatarem. Pontos em cinza escuro:
+    # cheio = tratada; vazio = não tratada. Textos e eixos em tons neutros
+    cores = {"tratada_melhor": "#2a78d6", "empate": "#c3c2b7", "nao_tratada_melhor": "#e34948"}
+    nomes_modelos = {"rf": "RF", "knn": "KNN"}
+    cor_pontos = "#52514e"
+    cor_texto = "#0b0b0b"
+    cor_secundaria = "#52514e"
+    cor_eixos = "#898781"
+    cor_grade = "#e1e0d9"
+
+    # 1. Só as linhas do R²; modelos na ordem em que aparecem na tabela
+    da_r2 = comparacao[comparacao["metrica"] == "r2"]
+    modelos = list(da_r2["modelo"].unique())
+
+    fig, ax = plt.subplots(figsize=(8, 8.6))
+
+    # 2. Uma linha por modelo × variável, de cima para baixo: a posição y diminui a cada
+    #    variável, e um espaço extra separa os modelos
+    posicoes = []
+    rotulos = []
+    meios = []
+    todos_r2 = []
+    y = 0
+    for modelo in modelos:
+        do_modelo = da_r2[da_r2["modelo"] == modelo]
+        posicoes_modelo = []
+
+        for variavel in do_modelo["variavel"].unique():
+            linha = do_modelo[do_modelo["variavel"] == variavel].iloc[0]
+            r2_tratada = linha["tratada"]
+            r2_nao_tratada = linha["nao_tratada"]
+
+            # 3. Barra entre os dois R², com a cor da base que teve o R² maior
+            if r2_tratada > r2_nao_tratada:
+                cor_barra = cores["tratada_melhor"]
+            elif r2_tratada < r2_nao_tratada:
+                cor_barra = cores["nao_tratada_melhor"]
+            else:
+                cor_barra = cores["empate"]
+            ax.plot([r2_tratada, r2_nao_tratada], [y, y], color=cor_barra, linewidth=3,
+                    solid_capstyle="round", zorder=2)
+
+            # 4. Pontos: a tratada cheia e a não tratada vazia, por cima (zorder maior)
+            ax.scatter(r2_tratada, y, s=58, color=cor_pontos, edgecolor="white", linewidth=0.8, zorder=3)
+            ax.scatter(r2_nao_tratada, y, s=58, facecolor="white", edgecolor=cor_pontos, linewidth=1.6,
+                       zorder=4)
+
+            posicoes.append(y)
+            posicoes_modelo.append(y)
+            rotulos.append(variavel)
+            todos_r2.append(r2_tratada)
+            todos_r2.append(r2_nao_tratada)
+            y = y - 1
+
+        meios.append(sum(posicoes_modelo) / len(posicoes_modelo))
+        y = y - 0.9
+
+    # 5. Linha do R² = 0 (prever sempre a média dá R² = 0), com uma nota embaixo
+    ax.axvline(0, color=cor_secundaria, linewidth=1, linestyle="--", zorder=1)
+    ax.text(0.005, posicoes[-1] - 1, "R² = 0: igual a prever com a média", color=cor_eixos, fontsize=8,
+            va="center")
+
+    # 6. Limites do eixo x: do menor ao maior R² (com o 0 sempre dentro), com uma folga de 5%
+    menor = min(min(todos_r2), 0)
+    maior = max(max(todos_r2), 0)
+    folga = 0.05 * (maior - menor)
+    ax.set_xlim(menor - folga, maior + folga)
+    ax.set_ylim(posicoes[-1] - 1.5, posicoes[0] + 0.7)
+
+    # 7. Nome de cada modelo à esquerda do grupo dele
+    #    (get_yaxis_transform: x em fração do painel e y nas posições das linhas)
+    for modelo, meio in zip(modelos, meios):
+        ax.text(-0.2, meio, nomes_modelos[modelo], transform=ax.get_yaxis_transform(), ha="right",
+                va="center", color=cor_texto, fontweight="bold")
+
+    ax.set_xlabel("R²", color=cor_eixos)
+    ax.set_yticks(posicoes)
+    ax.set_yticklabels(rotulos)
+    ax.tick_params(colors=cor_eixos, length=0)
+    ax.tick_params(axis="y", colors=cor_texto)
+    ax.grid(axis="x", color=cor_grade, linewidth=0.8)
+    ax.set_axisbelow(True)
+
+    # Sem as bordas de cima, da direita e da esquerda
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    ax.spines["left"].set_visible(False)
+
+    # 8. Uma legenda para a figura toda. As linhas e os pontos (Line2D) só desenham os símbolos
+    simbolos = [
+        Line2D([], [], marker="o", linestyle="", markersize=8, color=cor_pontos),
+        Line2D([], [], marker="o", linestyle="", markersize=8, markerfacecolor="white",
+               markeredgecolor=cor_pontos, markeredgewidth=1.6),
+        Line2D([], [], color=cores["tratada_melhor"], linewidth=3),
+        Line2D([], [], color=cores["nao_tratada_melhor"], linewidth=3),
+    ]
+    rotulos_legenda = ["tratada", "não tratada", "R² maior na tratada", "R² maior na não tratada"]
+    fig.suptitle("Com × sem tratamento de outliers nos modelos: o R² em cada base", color=cor_texto, y=0.995)
+    fig.legend(simbolos, rotulos_legenda, loc="upper center", bbox_to_anchor=(0.5, 0.965), ncol=2,
+               frameon=False)
+    fig.text(0.5, 0.885, "RF: Random Forest, alvo pH · KNN: cada variável prevista pelas outras · "
+             "validação cruzada em 5 blocos de meses seguidos", ha="center", color=cor_secundaria, fontsize=8)
+
+    # rect deixa livre a faixa da esquerda (nomes dos modelos) e a de cima (título e legenda)
+    plt.tight_layout(rect=(0.06, 0, 1, 0.87))
+
+    # Salva sem fechar a figura, para ela ainda poder ser exibida
+    if salvar:
+        salvar_visualizacao(fig, nome)
+
+    if plot:
+        plt.show()
+    else:
+        plt.close(fig)
+
+
+# %% [markdown]
 # # Todas as Visualizações
 
 # %%

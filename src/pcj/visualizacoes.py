@@ -1413,6 +1413,223 @@ def halteres_r2(comparacao, nome="halteres_r2", plot=False, salvar=True):
 
 
 # %% [markdown]
+# # Comparação entre bases (descritiva evolutiva)
+
+# %%
+def boxplots_bases(bases, variaveis=None, nome="boxplots_bases", plot=False, salvar=True):
+    """
+    Gera os boxplots de cada variável em várias bases, lado a lado: um painel por
+    variável, com uma caixa por base (na ordem do dicionário). Serve para comparar
+    a distribuição de uma variável antes e depois de uma etapa (ex.: limpeza,
+    tratamento de outliers, imputação).
+
+    Os pontos soltos são os valores além de 1,5 × IQR (a regra do próprio boxplot),
+    e não os outliers de algum método de detecção.
+
+    Parameters
+    ----------
+    bases : dict
+        Nome de cada base (rótulo da legenda) → pd.DataFrame com as variáveis em colunas.
+    variaveis : list, optional
+        Variáveis desenhadas, uma por painel. Se None, usa as variáveis da primeira
+        base (separar_colunas), by default None
+    nome : str, default "boxplots_bases"
+        Nome base do arquivo salvo.
+    plot : bool, default False
+        Determina se o código deve gerar visualizações
+        ao ser carregado.
+    salvar : bool, default True
+        Determina se o código deve salvar as visualizações
+        ao ser carregado.
+
+    Returns
+    -------
+    None
+    """
+    # Cores das bases, na ordem do dicionário (a primeira em cinza: em geral, a base de partida);
+    # textos e eixos em tons neutros
+    cores = ["#898781", "#2a78d6", "#1baf7a", "#eb6834", "#6250d6", "#e34948"]
+    cor_texto = "#0b0b0b"
+    cor_secundaria = "#52514e"
+    cor_eixos = "#898781"
+    cor_grade = "#e1e0d9"
+
+    # 1. Nomes das bases e variáveis (as da primeira base, se não forem dadas)
+    nomes_bases = list(bases.keys())
+    if variaveis is None:
+        from pcj.utils import separar_colunas
+        _, variaveis = separar_colunas(bases[nomes_bases[0]])
+
+    # 2. Grade de painéis: 4 colunas e quantas linhas forem precisas
+    #    (squeeze=False: axs é sempre uma tabela de painéis, mesmo com uma linha só)
+    n_colunas = 4
+    n_linhas = math.ceil(len(variaveis) / n_colunas)
+    fig, axs = plt.subplots(n_linhas, n_colunas, figsize=(14, 3 * n_linhas), squeeze=False)
+
+    for n, variavel in enumerate(variaveis):
+        # Linha e coluna do painel desta variável (// é a divisão inteira; % é o resto)
+        ax = axs[n // n_colunas, n % n_colunas]
+
+        # 3. Uma caixa por base: os valores da variável, sem os NaN (o boxplot não aceita NaN)
+        valores = []
+        for nome_base in nomes_bases:
+            valores.append(bases[nome_base][variavel].dropna())
+
+        caixas = ax.boxplot(valores, widths=0.6, patch_artist=True,
+                            medianprops={"color": cor_texto, "linewidth": 1.2},
+                            whiskerprops={"color": cor_secundaria}, capprops={"color": cor_secundaria},
+                            flierprops={"marker": "o", "markersize": 3, "markerfacecolor": "none",
+                                        "markeredgecolor": cor_secundaria, "alpha": 0.6})
+
+        # Cor de cada caixa (patch_artist=True permite pintar o interior)
+        for b, caixa in enumerate(caixas["boxes"]):
+            caixa.set_facecolor(cores[b % len(cores)])
+            caixa.set_edgecolor(cor_secundaria)
+
+        # Título, eixos e grade. As bases não aparecem no eixo x: a cor diz qual é (ver a legenda)
+        ax.set_title(variavel, color=cor_texto)
+        ax.set_xticks([])
+        ax.tick_params(colors=cor_eixos)
+        ax.grid(axis="y", color=cor_grade, linewidth=0.8)
+        ax.set_axisbelow(True)
+
+        # Sem as bordas de cima e da direita
+        ax.spines["top"].set_visible(False)
+        ax.spines["right"].set_visible(False)
+
+    # 4. Painéis que sobram na grade ficam em branco
+    for n in range(len(variaveis), n_linhas * n_colunas):
+        axs[n // n_colunas, n % n_colunas].axis("off")
+
+    # 5. Uma legenda para a figura toda. Os quadrados (Rectangle) só desenham as cores
+    quadrados = []
+    for b in range(len(nomes_bases)):
+        quadrados.append(plt.Rectangle((0, 0), 1, 1, color=cores[b % len(cores)]))
+    fig.suptitle("Distribuição de cada variável em cada base", color=cor_texto, y=0.995)
+    fig.legend(quadrados, nomes_bases, loc="upper center", bbox_to_anchor=(0.5, 0.97),
+               ncol=len(nomes_bases), frameon=False)
+    fig.text(0.5, 0.935, "Pontos soltos: valores além de 1,5 × IQR (a regra do boxplot)", ha="center",
+             color=cor_secundaria, fontsize=9)
+
+    # rect deixa livre a faixa de cima da figura, onde ficam o título e a legenda
+    plt.tight_layout(rect=(0, 0, 1, 0.93))
+
+    # Salva sem fechar a figura, para ela ainda poder ser exibida
+    if salvar:
+        salvar_visualizacao(fig, nome)
+
+    if plot:
+        plt.show()
+    else:
+        plt.close(fig)
+
+
+# %%
+def series_marcadas(base, marcas=None, variaveis=None, coluna_data="Data", nome="series_marcadas",
+                    plot=False, salvar=True):
+    """
+    Gera a série temporal de cada variável de uma base (um painel por variável) e marca
+    por cima conjuntos de valores escolhidos (ex.: os valores tratados como outliers, os
+    valores imputados). Os meses sem valor na base aparecem como falhas na linha.
+
+    Parameters
+    ----------
+    base : pd.DataFrame
+        Base desenhada em linha, com a coluna de datas e as variáveis.
+    marcas : dict, optional
+        Rótulo de cada conjunto (legenda) → pd.DataFrame com a coluna de datas e as
+        variáveis, com NaN em tudo o que não deve ser marcado. Cada conjunto ganha uma
+        cor e um símbolo. Se None, só desenha as séries, by default None
+    variaveis : list, optional
+        Variáveis desenhadas, uma por painel. Se None, usa as variáveis da base
+        (separar_colunas), by default None
+    coluna_data : str, default "Data"
+        Coluna com as datas (eixo x).
+    nome : str, default "series_marcadas"
+        Nome base do arquivo salvo.
+    plot : bool, default False
+        Determina se o código deve gerar visualizações
+        ao ser carregado.
+    salvar : bool, default True
+        Determina se o código deve salvar as visualizações
+        ao ser carregado.
+
+    Returns
+    -------
+    None
+    """
+    from matplotlib.lines import Line2D
+
+    # Cores e símbolos dos conjuntos marcados, na ordem do dicionário; a linha da base em cinza escuro
+    cores = ["#e34948", "#1baf7a", "#eb6834", "#6250d6", "#2a78d6"]
+    simbolos = ["x", "o", "s", "^", "D"]
+    cor_linha = "#52514e"
+    cor_texto = "#0b0b0b"
+    cor_eixos = "#898781"
+    cor_grade = "#e1e0d9"
+
+    if marcas is None:
+        marcas = {}
+
+    # 1. Variáveis da base, se não forem dadas
+    if variaveis is None:
+        from pcj.utils import separar_colunas
+        _, variaveis = separar_colunas(base)
+
+    # 2. Grade de painéis: 4 colunas e quantas linhas forem precisas
+    n_colunas = 4
+    n_linhas = math.ceil(len(variaveis) / n_colunas)
+    fig, axs = plt.subplots(n_linhas, n_colunas, figsize=(16, 2.8 * n_linhas), squeeze=False, sharex=True)
+
+    for n, variavel in enumerate(variaveis):
+        ax = axs[n // n_colunas, n % n_colunas]
+
+        # 3. A série da base: a linha se interrompe nos meses sem valor (NaN)
+        ax.plot(base[coluna_data], base[variavel], color=cor_linha, linewidth=0.9, zorder=2)
+
+        # 4. Cada conjunto marcado: só os valores que não são NaN
+        for m, rotulo in enumerate(marcas):
+            conjunto = marcas[rotulo]
+            com_valor = conjunto[variavel].notna()
+            ax.scatter(conjunto.loc[com_valor, coluna_data], conjunto.loc[com_valor, variavel],
+                       marker=simbolos[m % len(simbolos)], s=22, color=cores[m % len(cores)],
+                       linewidths=1.2, zorder=3 + m)
+
+        ax.set_title(variavel, color=cor_texto)
+        ax.tick_params(colors=cor_eixos, labelsize=8)
+        ax.grid(axis="y", color=cor_grade, linewidth=0.8)
+        ax.set_axisbelow(True)
+        ax.spines["top"].set_visible(False)
+        ax.spines["right"].set_visible(False)
+
+    # 5. Painéis que sobram na grade ficam em branco
+    for n in range(len(variaveis), n_linhas * n_colunas):
+        axs[n // n_colunas, n % n_colunas].axis("off")
+
+    # 6. Uma legenda para a figura toda: a linha da base e os símbolos de cada conjunto
+    simbolos_legenda = [Line2D([], [], color=cor_linha, linewidth=1.5)]
+    rotulos_legenda = ["série da base (falhas = meses sem valor)"]
+    for m, rotulo in enumerate(marcas):
+        simbolos_legenda.append(Line2D([], [], marker=simbolos[m % len(simbolos)], linestyle="",
+                                       markersize=6, color=cores[m % len(cores)], markeredgewidth=1.2))
+        rotulos_legenda.append(rotulo)
+    fig.suptitle("Série de cada variável, com os valores marcados", color=cor_texto, y=0.995)
+    fig.legend(simbolos_legenda, rotulos_legenda, loc="upper center", bbox_to_anchor=(0.5, 0.97),
+               ncol=len(rotulos_legenda), frameon=False)
+
+    plt.tight_layout(rect=(0, 0, 1, 0.94))
+
+    # Salva sem fechar a figura, para ela ainda poder ser exibida
+    if salvar:
+        salvar_visualizacao(fig, nome)
+
+    if plot:
+        plt.show()
+    else:
+        plt.close(fig)
+
+
+# %% [markdown]
 # # Todas as Visualizações
 
 # %%

@@ -486,14 +486,15 @@ def knn_regressor(df, variaveis=None, n_blocos=5, embaralhar=False, seed_embaral
 # # K-Means - Escolha do número de grupos (k)
 
 # %%
-def selecao_k(df, variaveis=None, k_min=2, k_max=10, n_seeds=30, verbose=False):
+def selecao_k(df, variaveis=None, k_min=2, k_max=10, n_seeds=30, criterio="cotovelo", verbose=False):
     """
     Testa quantidades de grupos (k) para o K-Means com três critérios: a inércia
     (método do cotovelo), o coeficiente de silhueta e o índice de Calinski-Harabasz.
     Usa o mesmo espaço da detecção de outliers (detect_outliers_pca_kmeans): os meses
     completos, padronizados e reduzidos por PCA (95% da variância).
     Cada k roda com n_seeds seeds, porque a posição inicial dos centros pode mudar os grupos.
-    A silhueta decide o k; o cotovelo e o Calinski-Harabasz confirmam.
+    O critério escolhido decide o k (por padrão, o cotovelo, como no projeto, seção 3.4);
+    os outros dois validam a escolha.
 
     Parameters
     ----------
@@ -508,6 +509,9 @@ def selecao_k(df, variaveis=None, k_min=2, k_max=10, n_seeds=30, verbose=False):
         Maior quantidade de grupos testada, by default 10
     n_seeds : int, optional
         Número de seeds do K-Means (random_state de 0 a n_seeds - 1), by default 30
+    criterio : str, optional
+        Critério que decide o k: "cotovelo", "silhueta" ou "calinski_harabasz".
+        Se o kneed não achar cotovelo, a silhueta decide (com aviso), by default "cotovelo"
     verbose : bool, optional
         Rodar a função exibe (print) o k apontado por cada critério, by default False
 
@@ -521,7 +525,8 @@ def selecao_k(df, variaveis=None, k_min=2, k_max=10, n_seeds=30, verbose=False):
         (indicado_silhueta, indicado_cotovelo, indicado_calinski_harabasz).
         Se o kneed não achar cotovelo, indicado_cotovelo fica False em todas as linhas.
     k_escolhido : int
-        O k com a maior silhueta média.
+        O k apontado pelo critério escolhido (com criterio="cotovelo" e sem cotovelo,
+        o k da silhueta).
     """
     # Bibliotecas
     import pandas as pd
@@ -534,6 +539,12 @@ def selecao_k(df, variaveis=None, k_min=2, k_max=10, n_seeds=30, verbose=False):
     if variaveis is None:
         from pcj.utils import separar_colunas
         _, variaveis = separar_colunas(df)
+
+    # Confere o critério antes das rodadas, para um nome errado não esperar todas elas para dar erro
+    criterios_validos = ["cotovelo", "silhueta", "calinski_harabasz"]
+
+    if criterio not in criterios_validos:
+        raise ValueError(f"criterio deve ser um destes: {criterios_validos}. Recebido: '{criterio}'")
 
     # 1. O PCA e o K-Means não aceitam NaN: só os meses completos entram
     X_nonan = df[variaveis].dropna(axis=0, how='any')
@@ -602,8 +613,18 @@ def selecao_k(df, variaveis=None, k_min=2, k_max=10, n_seeds=30, verbose=False):
     resumo["indicado_cotovelo"] = resumo["k"] == k_cotovelo
     resumo["indicado_calinski_harabasz"] = resumo["k"] == k_calinski
 
-    # 7. A silhueta decide; o cotovelo e o Calinski-Harabasz confirmam
-    k_escolhido = k_silhueta
+    # 7. O critério escolhido decide (por padrão, o cotovelo, como no projeto, 3.4); os outros dois validam
+    if criterio == "cotovelo":
+        k_escolhido = k_cotovelo
+
+        # Sem cotovelo, a silhueta decide. O aviso sai mesmo com verbose=False: a regra mudou
+        if k_escolhido is None:
+            k_escolhido = k_silhueta
+            print(f"Aviso: o kneed não achou cotovelo na inércia; a silhueta decide (k = {k_silhueta})")
+    elif criterio == "silhueta":
+        k_escolhido = k_silhueta
+    else:
+        k_escolhido = k_calinski
 
     if verbose:
         print(f"K-Means em {len(X_nonan)} meses completos ({len(df) - len(X_nonan)} com NaN, não avaliados); "
@@ -617,7 +638,7 @@ def selecao_k(df, variaveis=None, k_min=2, k_max=10, n_seeds=30, verbose=False):
             print(f"Cotovelo da inércia (kneed): k = {k_cotovelo}")
 
         print(f"Calinski-Harabasz (maior média): k = {k_calinski}")
-        print(f"k escolhido (a silhueta decide): {k_escolhido}")
+        print(f"k escolhido (critério: {criterio}): {k_escolhido}")
 
     return rodadas, resumo, k_escolhido
 
@@ -626,7 +647,7 @@ def selecao_k(df, variaveis=None, k_min=2, k_max=10, n_seeds=30, verbose=False):
 # # K-Means - Clustering
 
 # %%
-def k_means(df, variaveis=None, n_clusters=2, coluna_data="Data", verbose=False):
+def k_means(df, variaveis=None, n_clusters=4, coluna_data="Data", verbose=False):
     """
     Agrupa os meses com o algoritmo K-Means, no mesmo espaço da detecção de outliers
     e da selecao_k: meses completos, padronizados e reduzidos por PCA (95% da variância).
@@ -640,7 +661,8 @@ def k_means(df, variaveis=None, n_clusters=2, coluna_data="Data", verbose=False)
     variaveis : list, optional
         Lista com nomes das colunas identificadas como variaveis de df, by default None
     n_clusters : int, optional
-        Número de grupos (k). Ver selecao_k para a escolha, by default 2
+        Número de grupos (k). O padrão é o k do cotovelo nestas bases; ver selecao_k
+        para a escolha, by default 4
     coluna_data : str, optional
         Nome da coluna de df com a data de cada mês, by default "Data"
     verbose : bool, optional
